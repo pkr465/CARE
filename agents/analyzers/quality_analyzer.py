@@ -134,11 +134,11 @@ class QualityAnalyzer:
         # HDL anti-pattern rules
         hdl_patterns = [
             # Blocking assignments in sequential blocks
-            (r"always\s*@\s*\(posedge|negedge\).*?begin.*?[^<]\s*=\s*", "HDL001", "Blocking assignment in sequential always block (use <=)", "high"),
+            (r"always(?:_ff)?\s*@\s*\((?:posedge|negedge)\b[^;]*?begin[^;]*?\b\w+\s+=[^=]", "HDL001", "Blocking assignment in sequential always block (use <=)", "high"),
             # Non-blocking in combinational blocks
             (r"always\s*@\s*\*\s*begin.*?<=", "HDL002", "Non-blocking assignment in combinational block (use =)", "high"),
             # Incomplete sensitivity list
-            (r"always\s*@\s*\([a-zA-Z0-9_\s,]*\)\s*begin", "HDL003", "Potential incomplete sensitivity list (consider always @*)", "medium"),
+            (r"always\s*@\s*\((?!.*(?:posedge|negedge))[a-zA-Z0-9_\s,]+\)\s*begin", "HDL003", "Potential incomplete sensitivity list (consider always @*)", "medium"),
             # Initial blocks in synthesizable code
             (r"initial\s+begin", "HDL004", "Initial block may not synthesize (use reset if needed)", "medium"),
             # Implicit net declarations
@@ -146,7 +146,7 @@ class QualityAnalyzer:
             # Delays in synthesizable RTL
             (r"#\s*\d+", "HDL006", "Time delay in synthesizable RTL (#delay)", "high"),
             # Multiple drivers (continuous assignments or multiple always blocks on same signal)
-            (r"assign\s+[a-zA-Z0-9_]+.*?;.*?assign\s+\1", "HDL007", "Multiple drivers detected on same signal", "critical"),
+            (r"assign\s+([a-zA-Z0-9_]+).*?;.*?assign\s+\1", "HDL007", "Multiple drivers detected on same signal", "critical"),
             # Missing default in case
             (r"case\s*\([^)]+\)(?!.*?default)", "HDL008", "Case statement missing default clause", "medium"),
         ]

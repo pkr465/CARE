@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 # HDL Analyzers
 from agents.analyzers.quality_analyzer import QualityAnalyzer
 from agents.analyzers.complexity_analyzer import ComplexityAnalyzer
-from agents.analyzers.security_analyzer import SynthesisSafetyAnalyzer  # Renamed
+from agents.analyzers.synthesis_safety_analyzer import SynthesisSafetyAnalyzer
 from agents.analyzers.documentation_analyzer import DocumentationAnalyzer
 from agents.analyzers.maintainability_analyzer import MaintainabilityAnalyzer
-from agents.analyzers.test_coverage_analyzer import VerificationCoverageAnalyzer  # Renamed
-from agents.analyzers.potential_deadlock_analyzer import CDCAnalyzer  # Renamed (Clock Domain Crossing)
-from agents.analyzers.null_pointer_analyzer import UninitializedSignalAnalyzer  # Renamed
-from agents.analyzers.memory_corruption_analyzer import SignalIntegrityAnalyzer  # Renamed
+from agents.analyzers.verification_coverage_analyzer import VerificationCoverageAnalyzer
+from agents.analyzers.cdc_analyzer import CDCAnalyzer
+from agents.analyzers.uninitialized_signal_analyzer import UninitializedSignalAnalyzer
+from agents.analyzers.signal_integrity_analyzer import SignalIntegrityAnalyzer
 
 # HDL-specific adapters (optional — graceful degradation)
 try:

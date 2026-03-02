@@ -141,7 +141,7 @@ class SynthesisSafetyAnalyzer:
                 "sev": "critical",
                 "category": "combinational_loop",
                 "desc": "Potential combinational loop detected",
-                "pat": r"assign\s+\w+.*?;\s*assign\s+\w+.*?\1",
+                "pat": r"assign\s+(\w+).*?;\s*assign\s+\w+.*?\1",
                 "fix": "Break feedback loops with registers or verify feedback is intentional",
             },
             {
@@ -156,8 +156,8 @@ class SynthesisSafetyAnalyzer:
                 "id": "HDL-DRC-003",
                 "sev": "high",
                 "category": "incomplete_sensitivity",
-                "desc": "Incomplete sensitivity list in always block",
-                "pat": r"always\s*@\s*\([^)]*\)(?!.*always\s*@\s*\*)",
+                "desc": "Incomplete sensitivity list in combinational always block",
+                "pat": r"always\s*@\s*\((?!.*(?:posedge|negedge))[^)]*\)",
                 "fix": "Use always @* for combinational logic or include all inputs",
             },
 
@@ -167,7 +167,7 @@ class SynthesisSafetyAnalyzer:
                 "sev": "critical",
                 "category": "cdc",
                 "desc": "Clock domain crossing without synchronizer detected",
-                "pat": r"(posedge|negedge)\s+(\w+).*?(posedge|negedge)\s+(?!\2)",
+                "pat": r"posedge\s+(\w+clk\w*).*?posedge\s+(?!\1)(\w+clk\w*)",
                 "fix": "Add CDC synchronizer (gray code or multi-stage FF) between clock domains",
             },
             {
@@ -175,7 +175,7 @@ class SynthesisSafetyAnalyzer:
                 "sev": "high",
                 "category": "metastability",
                 "desc": "Potential single-stage synchronizer (metastability risk)",
-                "pat": r"reg\s+\w+\s*=\s*(?:input|wire).*?reg\s+\w+\s*=\s*\1",
+                "pat": r"reg\s+(\w+)\s*=\s*(?:input|wire).*?reg\s+\w+\s*=\s*\1",
                 "fix": "Use at least 2-stage flip-flop synchronizer for CDC",
             },
 

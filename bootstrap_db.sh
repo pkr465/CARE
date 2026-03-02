@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# CURE — Codebase Update & Refactor Engine
+# CARE — Codebase Analysis & Repair Engine
 # One-step PostgreSQL bootstrap script
 #
 # Installs PostgreSQL + pgvector (local only), creates the application user,

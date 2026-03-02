@@ -1,5 +1,5 @@
 # ============================================================================
-# CURE — Codebase Update & Refactor Engine
+# CARE — Codebase Analysis & Repair Engine
 # One-step PostgreSQL bootstrap script (Windows / PowerShell)
 #
 # Installs PostgreSQL + pgvector (local only), creates the application user,

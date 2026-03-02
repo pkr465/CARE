@@ -91,7 +91,7 @@ def add_executive_summary(doc):
     """Add Executive Summary section."""
     doc.add_heading('1. Executive Summary', level=1)
 
-    intro = """CARE (Codebase Analysis & Repair Engine) is a comprehensive framework for automated analysis, design review, and repair of Verilog/SystemVerilog HDL codebases. Originally derived from the CURE architecture, CARE adapts and extends these capabilities specifically for hardware design languages, enabling teams to assess and improve digital design quality at scale."""
+    intro = """CARE (Codebase Analysis & Repair Engine) is a comprehensive framework for automated analysis, design review, and repair of Verilog/SystemVerilog HDL codebases. CARE provides comprehensive capabilities for hardware design languages, enabling teams to assess and improve digital design quality at scale."""
 
     doc.add_paragraph(intro)
 
@@ -360,13 +360,13 @@ Phase 4 - Reporting: Multi-format output generation"""
     analyzers = [
         ('QualityAnalyzer', 'quality_analyzer.py', 'HDL coding quality violations'),
         ('ComplexityAnalyzer', 'complexity_analyzer.py', 'Always block and module complexity'),
-        ('SynthesisSafetyAnalyzer', 'security_analyzer.py', 'Synthesis safety hazards'),
+        ('SynthesisSafetyAnalyzer', 'synthesis_safety_analyzer.py', 'Synthesis safety hazards'),
         ('DocumentationAnalyzer', 'documentation_analyzer.py', 'Documentation coverage'),
         ('MaintainabilityAnalyzer', 'maintainability_analyzer.py', 'Maintainability index'),
-        ('VerificationCoverageAnalyzer', 'test_coverage_analyzer.py', 'Testbench and coverage metrics'),
-        ('CDCAnalyzer', 'potential_deadlock_analyzer.py', 'Clock domain crossing'),
-        ('UninitializedSignalAnalyzer', 'null_pointer_analyzer.py', 'Undriven signal detection'),
-        ('SignalIntegrityAnalyzer', 'memory_corruption_analyzer.py', 'Bus contention and type mismatches'),
+        ('VerificationCoverageAnalyzer', 'verification_coverage_analyzer.py', 'Testbench and coverage metrics'),
+        ('CDCAnalyzer', 'cdc_analyzer.py', 'Clock domain crossing'),
+        ('UninitializedSignalAnalyzer', 'uninitialized_signal_analyzer.py', 'Undriven signal detection'),
+        ('SignalIntegrityAnalyzer', 'signal_integrity_analyzer.py', 'Bus contention and type mismatches'),
     ]
 
     for i, (analyzer, file, purpose) in enumerate(analyzers, 1):
@@ -628,13 +628,13 @@ def add_project_structure(doc):
 │   ├── analyzers/
 │   │   ├── quality_analyzer.py         # HDL quality checks
 │   │   ├── complexity_analyzer.py      # Complexity metrics
-│   │   ├── security_analyzer.py        # Synthesis safety
+│   │   ├── synthesis_safety_analyzer.py # Synthesis safety (DRC)
 │   │   ├── documentation_analyzer.py   # Documentation coverage
 │   │   ├── maintainability_analyzer.py # Maintainability index
-│   │   ├── test_coverage_analyzer.py   # Verification coverage
-│   │   ├── potential_deadlock_analyzer.py # CDC analysis
-│   │   ├── null_pointer_analyzer.py    # Uninitialized signals
-│   │   └── memory_corruption_analyzer.py # Signal integrity
+│   │   ├── verification_coverage_analyzer.py # Verification coverage
+│   │   ├── cdc_analyzer.py             # Clock domain crossing
+│   │   ├── uninitialized_signal_analyzer.py # Uninitialized signals
+│   │   └── signal_integrity_analyzer.py # Signal integrity
 │   ├── adapters/
 │   │   ├── base_adapter.py             # Base adapter interface
 │   │   ├── ast_complexity_adapter.py   # Verilator AST complexity

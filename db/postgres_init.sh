@@ -1,5 +1,5 @@
 #!/bin/bash
-# CURE — Codebase Update & Refactor Engine
+# CARE — Codebase Analysis & Repair Engine
 # PostgreSQL / PGVector initialisation script
 # Note: environment-specific values may need adjustment per deployment
 

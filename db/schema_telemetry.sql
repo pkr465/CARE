@@ -1,4 +1,4 @@
--- CURE — Codebase Update & Refactor Engine
+-- CARE — Codebase Analysis & Repair Engine
 -- PostgreSQL Schema for Telemetry & HITL Tables
 -- Run with:
 --   psql -U postgres -d codebase_analytics_db -a -e -f db/schema_telemetry.sql

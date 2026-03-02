@@ -1,4 +1,4 @@
--- CURE — Codebase Update & Refactor Engine
+-- CARE — Codebase Analysis & Repair Engine
 -- PostgreSQL Schema Setup for Vector DB
 -- Run with:
 --   psql -U postgres -d postgres -a -e -f db/schema_codebase_analytics.sql

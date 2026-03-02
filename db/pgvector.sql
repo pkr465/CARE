@@ -1,4 +1,4 @@
--- CURE — Codebase Update & Refactor Engine
+-- CARE — Codebase Analysis & Repair Engine
 -- Quick PGVector setup runner
 
 psql -U postgres -d postgres -f db/pgvector_roles_and_extensions.sql

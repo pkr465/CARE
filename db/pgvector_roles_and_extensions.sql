@@ -1,5 +1,5 @@
--- CURE — Codebase Update & Refactor Engine
--- Create application role/user for CURE vector DB if it doesn't exist
+-- CARE — Codebase Analysis & Repair Engine
+-- Create application role/user for CARE vector DB if it doesn't exist
 DO $$
 BEGIN
     IF NOT EXISTS (

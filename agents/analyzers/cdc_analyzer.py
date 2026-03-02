@@ -23,6 +23,8 @@ class CDCAnalyzer(RuntimeAnalyzerBase):
     _POSEDGE_CLK = re.compile(r"\bposedge\s+(\w+)")
     _NEGEDGE_CLK = re.compile(r"\bnegedge\s+(\w+)")
     _CLK_PATTERN = re.compile(r"(clk\w*|clock\w*)", re.IGNORECASE)
+    # Reset signal names to exclude from clock domain detection
+    _RESET_PATTERN = re.compile(r"^(rst|reset|rst_n|resetn|arst|areset|srst|sys_rst)", re.IGNORECASE)
 
     # Synchronizer patterns
     _SYNC_PATTERN = re.compile(r"(sync\w*|synchronizer|synchron)", re.IGNORECASE)
@@ -71,21 +73,29 @@ class CDCAnalyzer(RuntimeAnalyzerBase):
         cdc_risk_count = 0
         clocks_detected: Set[str] = set()
 
-        # Detect all clock signals
+        # Detect all clock signals (excluding reset signals)
         for m in self._POSEDGE_CLK.finditer(source):
-            clocks_detected.add(m.group(1))
+            sig = m.group(1)
+            if not self._RESET_PATTERN.match(sig):
+                clocks_detected.add(sig)
         for m in self._NEGEDGE_CLK.finditer(source):
-            clocks_detected.add(m.group(1))
+            sig = m.group(1)
+            if not self._RESET_PATTERN.match(sig):
+                clocks_detected.add(sig)
 
         func_blocks = self._get_function_blocks(source)
 
         for block_name, body, start_line in func_blocks:
-            # Detect clock domain crossings
+            # Detect clock domain crossings (excluding reset signals)
             block_clocks = set()
             for m in self._POSEDGE_CLK.finditer(body):
-                block_clocks.add(m.group(1))
+                sig = m.group(1)
+                if not self._RESET_PATTERN.match(sig):
+                    block_clocks.add(sig)
             for m in self._NEGEDGE_CLK.finditer(body):
-                block_clocks.add(m.group(1))
+                sig = m.group(1)
+                if not self._RESET_PATTERN.match(sig):
+                    block_clocks.add(sig)
 
             # If multiple clocks in same block, check for synchronizer
             if len(block_clocks) > 1:
