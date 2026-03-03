@@ -405,8 +405,20 @@ def run_analysis_background(
                 from agents.context.design_context_builder import DesignContextBuilder
                 dc_config = global_config._data.get("design_context", {}) if global_config else {}
                 if dc_config.get("enable", True):
+                    # Use the real codebase root from config for constraint
+                    # file discovery (the analysis path may be a temp upload dir).
+                    dc_codebase = codebase_path
+                    if global_config:
+                        _cfg_cb = global_config.get("paths.code_base_path", "")
+                        if _cfg_cb:
+                            _cfg_p = Path(_cfg_cb)
+                            if not _cfg_p.is_absolute():
+                                _cfg_p = Path.cwd() / _cfg_p
+                            _cfg_p = _cfg_p.resolve()
+                            if _cfg_p.is_dir():
+                                dc_codebase = str(_cfg_p)
                     dc_builder = DesignContextBuilder(
-                        codebase_path=codebase_path,
+                        codebase_path=dc_codebase,
                         config=dc_config,
                     )
                     design_context = dc_builder.build_context()

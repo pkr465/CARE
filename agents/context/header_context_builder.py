@@ -341,20 +341,20 @@ class HDLContextBuilder:
         # Auto-discover include directories when none provided.
         # Walks the codebase tree looking for directories that contain
         # header files (.svh, .vh) and adds them as implicit include paths.
+        # Also includes directories with HDL source files (.v, .sv) since
+        # includes are often co-located with source.
         _walk_exclude = self._DEFAULT_WALK_EXCLUDE | set(exclude_dirs or [])
         if not self.include_paths and self.codebase_path.is_dir():
-            _header_exts = {".svh", ".vh"}
+            _hdl_exts = {".svh", ".vh", ".v", ".sv"}
             discovered: List[Path] = []
             try:
                 for root, dirs, files in os.walk(self.codebase_path):
                     dirs[:] = [d for d in dirs if d not in _walk_exclude]
-                    has_headers = any(
-                        Path(f).suffix.lower() in _header_exts for f in files
+                    has_hdl = any(
+                        Path(f).suffix.lower() in _hdl_exts for f in files
                     )
-                    if has_headers:
-                        rp = Path(root).resolve()
-                        if rp != self.codebase_path:
-                            discovered.append(rp)
+                    if has_hdl:
+                        discovered.append(Path(root).resolve())
                 self.include_paths = discovered
                 if discovered:
                     logger.info(
@@ -363,6 +363,11 @@ class HDLContextBuilder:
                     )
                     for dp in discovered[:10]:
                         logger.debug(f"    > {dp}")
+                else:
+                    logger.info(
+                        f"  No HDL directories found under {self.codebase_path} "
+                        f"— include resolution will use fallback recursive search"
+                    )
             except Exception as walk_err:
                 logger.debug(f"  Include path auto-discovery failed: {walk_err}")
 
