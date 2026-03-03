@@ -623,7 +623,6 @@ class CodebaseFixerAgent:
         # State machine variables
         depth = 0
         in_string = False
-        in_char = False
         in_line_comment = False
         in_block_comment = False
         
@@ -638,7 +637,7 @@ class CodebaseFixerAgent:
                 char = line[i]
                 
                 # Handle comments and strings to avoid false brace counting
-                if not in_string and not in_char and not in_block_comment and not in_line_comment:
+                if not in_string and not in_block_comment and not in_line_comment:
                     if char == '/' and i + 1 < len(line) and line[i+1] == '/':
                         in_line_comment = True
                         i += 1
@@ -646,7 +645,8 @@ class CodebaseFixerAgent:
                         in_block_comment = True
                         i += 1
                     elif char == '"': in_string = True
-                    elif char == "'": in_char = True
+                    # NOTE: Single-quote (') is NOT a string/char delimiter in Verilog/SV.
+                    # It is used for bit-width literals: 8'b0, 32'hFF, '0, '1, etc.
                     elif char == '{': depth += 1
                     elif char == '}': depth = max(0, depth - 1)
                 elif in_line_comment and char == '\n': in_line_comment = False
@@ -654,7 +654,6 @@ class CodebaseFixerAgent:
                     in_block_comment = False
                     i += 1
                 elif in_string and char == '"' and line[i-1] != '\\': in_string = False
-                elif in_char and char == "'" and line[i-1] != '\\': in_char = False
                 
                 i += 1
 
@@ -675,15 +674,13 @@ class CodebaseFixerAgent:
         return chunks
 
     def _detect_language(self, file_path: Path) -> str:
-        """Determine coding language for better prompting."""
+        """Determine coding language for better prompting (HDL-focused)."""
         ext = file_path.suffix.lower()
         mapping = {
-            '.v': 'Verilog', '.sv': 'SystemVerilog', '.svh': 'SystemVerilog', '.vh': 'Verilog',
-            '.py': 'Python', '.cpp': 'C++', '.cc': 'C++', '.c': 'C', '.h': 'C++', '.hpp': 'C++',
-            '.js': 'JavaScript', '.ts': 'TypeScript', '.java': 'Java', '.json': 'JSON',
-            '.html': 'HTML', '.css': 'CSS', '.go': 'Go', '.rs': 'Rust'
+            '.v': 'Verilog', '.sv': 'SystemVerilog', '.svh': 'SystemVerilog',
+            '.vh': 'Verilog', '.vhd': 'VHDL', '.vhdl': 'VHDL',
         }
-        return mapping.get(ext, 'Code')
+        return mapping.get(ext, 'SystemVerilog')
 
     def _get_tail_context(self, text: str) -> str:
         """Extract tail context from text for inter-chunk continuity."""
@@ -979,7 +976,15 @@ class CodebaseFixerAgent:
         match = re.search(r"```(?:\w+)?\n(.*?)```", response, re.DOTALL)
         if match:
             return self._smart_strip_code(match.group(1))
-        if any(kw in response for kw in ["#include", "namespace", "class", "void ", "int ", "def ", "import "]):
+        # Detect Verilog/SystemVerilog keywords (HDL) or fallback C/Python keywords
+        hdl_keywords = [
+            "module ", "endmodule", "always ", "always_ff", "always_comb",
+            "assign ", "input ", "output ", "wire ", "reg ", "logic ",
+            "initial ", "generate", "endgenerate", "`include", "`define",
+            "`ifdef", "`ifndef", "parameter ", "localparam ",
+        ]
+        legacy_keywords = ["#include", "namespace", "class", "void ", "int ", "def ", "import "]
+        if any(kw in response for kw in hdl_keywords + legacy_keywords):
             return self._smart_strip_code(response)
         return None
 
@@ -1014,7 +1019,6 @@ class CodebaseFixerAgent:
         open_count = 0
         close_count = 0
         in_string = False
-        in_char = False
         in_line_comment = False
         in_block_comment = False
         i = 0
@@ -1042,13 +1046,6 @@ class CodebaseFixerAgent:
                     in_string = False
                 i += 1
                 continue
-            # --- Char literal transitions ---
-            if in_char:
-                if ch == "'" and prev_ch != '\\':
-                    in_char = False
-                i += 1
-                continue
-
             # --- Detect comment/string starts ---
             if ch == '/' and i + 1 < length:
                 next_ch = text[i + 1]
@@ -1064,10 +1061,8 @@ class CodebaseFixerAgent:
                 in_string = True
                 i += 1
                 continue
-            if ch == "'":
-                in_char = True
-                i += 1
-                continue
+            # NOTE: Single-quote (') is NOT a string/char delimiter in Verilog/SV.
+            # It is used for bit-width literals: 8'b0, 32'hFF, '0, '1, etc.
 
             # --- Count braces ---
             if ch == '{':

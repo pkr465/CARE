@@ -86,9 +86,9 @@ llm:
   chat_endpoint: "https://qgenie-chat.qualcomm.com"
 
   # ── Request defaults ───────────────────────────────────────────────────
-  # Note: Claude Opus max output is 64000. Set conservatively below that.
-  # For HDL analysis, longer outputs helpful for design reviews and refactoring.
-  max_tokens: 16384
+  # Max output tokens per LLM call. Set high enough for detailed code review.
+  # Azure GPT-5.2 supports up to 128k context; this controls output portion only.
+  max_tokens: 32768
   temperature: 0.1
   timeout: 120 # seconds per request
   max_retries: 2

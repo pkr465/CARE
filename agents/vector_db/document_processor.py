@@ -17,7 +17,7 @@ class VectorDBDocumentProcessor:
         self.chunk_size = config.get('chunk_size', 4000)
         self.overlap_size = config.get('overlap_size', 200)
         self.include_code = config.get('include_code', True)
-        self.cpp_specific = config.get('cpp_specific', True)
+        self.hdl_specific = config.get('hdl_specific', True)
         self.enable_health_reports = config.get('enable_health_reports', True)
         self.enable_chatbot_optimization = config.get('enable_chatbot_optimization', True)
     
@@ -33,7 +33,7 @@ class VectorDBDocumentProcessor:
         
         # Process individual file documents
         if file_cache:
-            documents.extend(self._process_cpp_file_documents(file_cache))
+            documents.extend(self._process_hdl_file_documents(file_cache))
         
         # Process dependency graph documents
         if dependency_graph:
@@ -57,7 +57,7 @@ class VectorDBDocumentProcessor:
         
         return documents
     
-    def _process_cpp_file_documents(self, file_cache: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _process_hdl_file_documents(self, file_cache: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Process individual HDL file documents."""
         documents = []
         
@@ -66,7 +66,7 @@ class VectorDBDocumentProcessor:
                 continue
                 
             # Create main file document
-            file_doc = self._create_cpp_file_document(file_data)
+            file_doc = self._create_hdl_file_document(file_data)
             if file_doc:
                 documents.append(file_doc)
             
@@ -90,7 +90,7 @@ class VectorDBDocumentProcessor:
         
         return documents
     
-    def _create_cpp_file_document(self, file_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _create_hdl_file_document(self, file_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Create a document for an HDL file."""
         try:
             file_path = file_data.get('file_relative_path', file_data.get('file_name', 'unknown'))
@@ -102,7 +102,7 @@ class VectorDBDocumentProcessor:
             # File overview
             overview = f"File: {file_name}\n"
             overview += f"Path: {file_path}\n"
-            overview += f"Language: {file_data.get('language', 'cpp')}\n"
+            overview += f"Language: {file_data.get('language', 'systemverilog')}\n"
             overview += f"Size: {file_data.get('size_bytes', 0)} bytes\n"
             
             # Metrics
@@ -146,11 +146,11 @@ class VectorDBDocumentProcessor:
             if self.include_code and file_data.get('source'):
                 source_code = file_data['source']
                 if len(source_code) <= self.chunk_size:
-                    content_sections.append(f"Source Code:\n```cpp\n{source_code}\n```")
+                    content_sections.append(f"Source Code:\n```systemverilog\n{source_code}\n```")
                 else:
                     # Truncate large source files
                     truncated = source_code[:self.chunk_size - 200]
-                    content_sections.append(f"Source Code (truncated):\n```cpp\n{truncated}\n...\n```")
+                    content_sections.append(f"Source Code (truncated):\n```systemverilog\n{truncated}\n...\n```")
             
             # Combine all sections
             content = "\n\n".join(content_sections)
@@ -160,10 +160,10 @@ class VectorDBDocumentProcessor:
                 'id': f"file_{file_path.replace('/', '_').replace('.', '_')}",
                 'content': content,
                 'metadata': {
-                    'type': 'cpp_file',
+                    'type': 'hdl_file',
                     'file_path': file_path,
                     'file_name': file_name,
-                    'language': file_data.get('language', 'cpp'),
+                    'language': file_data.get('language', 'systemverilog'),
                     'size_bytes': file_data.get('size_bytes', 0),
                     'metrics': metrics,
                     'complexity_score': file_data.get('complexity_score', 0),
@@ -215,7 +215,7 @@ class VectorDBDocumentProcessor:
                 'id': f"function_{file_path.replace('/', '_').replace('.', '_')}_{func_name}",
                 'content': content,
                 'metadata': {
-                    'type': 'cpp_function',
+                    'type': 'hdl_module',
                     'file_path': file_path,
                     'function_name': func_name,
                     'line_number': func_data.get('line', 0),
@@ -262,7 +262,7 @@ class VectorDBDocumentProcessor:
                 'id': f"class_{file_path.replace('/', '_').replace('.', '_')}_{class_name}",
                 'content': content,
                 'metadata': {
-                    'type': 'cpp_class',
+                    'type': 'hdl_interface',
                     'file_path': file_path,
                     'class_name': class_name,
                     'line_number': class_data.get('line', 0),
@@ -547,15 +547,15 @@ class VectorDBDocumentProcessor:
             # Add chatbot-friendly tags based on document type
             doc_type = doc['metadata'].get('type', 'unknown')
             
-            if doc_type == 'cpp_file':
-                doc['metadata']['chatbot_tags'] = ['file', 'code', 'cpp', 'source']
-                doc['metadata']['chatbot_summary'] = f"C++ file analysis for {doc['metadata'].get('file_name', 'unknown file')}"
-            elif doc_type == 'cpp_function':
-                doc['metadata']['chatbot_tags'] = ['function', 'code', 'cpp', 'method']
-                doc['metadata']['chatbot_summary'] = f"Function {doc['metadata'].get('function_name', 'unknown')} analysis"
-            elif doc_type == 'cpp_class':
-                doc['metadata']['chatbot_tags'] = ['class', 'code', 'cpp', 'object']
-                doc['metadata']['chatbot_summary'] = f"Class {doc['metadata'].get('class_name', 'unknown')} analysis"
+            if doc_type == 'hdl_file':
+                doc['metadata']['chatbot_tags'] = ['file', 'code', 'hdl', 'source']
+                doc['metadata']['chatbot_summary'] = f"HDL file analysis for {doc['metadata'].get('file_name', 'unknown file')}"
+            elif doc_type == 'hdl_module':
+                doc['metadata']['chatbot_tags'] = ['module', 'code', 'hdl', 'design']
+                doc['metadata']['chatbot_summary'] = f"Module {doc['metadata'].get('function_name', 'unknown')} analysis"
+            elif doc_type == 'hdl_interface':
+                doc['metadata']['chatbot_tags'] = ['interface', 'code', 'hdl', 'design']
+                doc['metadata']['chatbot_summary'] = f"Interface {doc['metadata'].get('class_name', 'unknown')} analysis"
             elif doc_type == 'health_summary':
                 doc['metadata']['chatbot_tags'] = ['health', 'metrics', 'summary', 'analysis']
                 doc['metadata']['chatbot_summary'] = "Project health and quality metrics summary"
@@ -570,9 +570,10 @@ class VectorDBDocumentProcessor:
             content_lower = doc.get('content', '').lower()
             keywords = []
             
-            # Extract technical keywords
-            cpp_keywords = ['class', 'function', 'method', 'variable', 'include', 'namespace', 'template']
-            for keyword in cpp_keywords:
+            # Extract HDL technical keywords
+            hdl_keywords = ['module', 'interface', 'function', 'task', 'always', 'assign',
+                            'include', 'parameter', 'generate', 'instantiation', 'port']
+            for keyword in hdl_keywords:
                 if keyword in content_lower:
                     keywords.append(keyword)
             
@@ -586,7 +587,7 @@ class VectorDBDocumentProcessor:
             
             # Add relevance scoring hints
             doc['metadata']['chatbot_relevance_hints'] = {
-                'code_analysis': doc_type in ['cpp_file', 'cpp_function', 'cpp_class'],
+                'code_analysis': doc_type in ['hdl_file', 'hdl_module', 'hdl_interface'],
                 'health_metrics': doc_type in ['health_summary', 'comprehensive_health_report'],
                 'project_overview': doc_type in ['analysis_summary', 'dependency_summary'],
                 'technical_details': 'line_number' in doc['metadata'] or 'complexity' in doc['metadata']

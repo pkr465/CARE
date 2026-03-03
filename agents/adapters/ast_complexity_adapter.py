@@ -68,13 +68,12 @@ class HDLComplexityAdapter(BaseStaticAdapter):
         """Find the closing brace matching the one at *open_pos*."""
         depth = 0
         in_string = False
-        in_char = False
         in_line_comment = False
         in_block_comment = False
         i = open_pos
         while i < len(source):
             c = source[i]
-            # Handle string/char/comment state
+            # Handle string/comment state
             if in_line_comment:
                 if c == '\n':
                     in_line_comment = False
@@ -87,11 +86,6 @@ class HDLComplexityAdapter(BaseStaticAdapter):
                     i += 1  # skip escaped char
                 elif c == '"':
                     in_string = False
-            elif in_char:
-                if c == '\\':
-                    i += 1
-                elif c == "'":
-                    in_char = False
             else:
                 if c == '/' and i + 1 < len(source):
                     nxt = source[i + 1]
@@ -101,8 +95,8 @@ class HDLComplexityAdapter(BaseStaticAdapter):
                         in_block_comment = True
                 elif c == '"':
                     in_string = True
-                elif c == "'":
-                    in_char = True
+                # NOTE: Single-quote (') is NOT a char delimiter in Verilog/SV.
+                # It is used for bit-width literals: 8'b0, 32'hFF, '0, '1, etc.
                 elif c == '{':
                     depth += 1
                 elif c == '}':

@@ -93,8 +93,6 @@ class CodebaseLLMAgent:
     - Configuration-driven email recipients
     """
 
-    C_EXTS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
-
     # Chunking Config
     TARGET_CHUNK_CHARS = 12000  # ~3k tokens
     OVERLAP_LINES = 25
@@ -771,13 +769,17 @@ class CodebaseLLMAgent:
                         except Exception:
                             pass
 
+                # Determine language tag for code fences
+                _ext = Path(rel_path).suffix.lower() if rel_path else ''
+                _lang_tag = 'systemverilog' if _ext in ('.sv', '.svh') else 'verilog' if _ext in ('.v', '.vh') else _ext.lstrip('.') or 'text'
+
                 final_prompt = f"""
                 {CODEBASE_ANALYSIS_PROMPT}
 
                 {prompt_constraints_section}
 
                 TARGET SOURCE CODE ({rel_path} - Part {chunk_idx+1}/{total_chunks}):
-                ```cpp
+                ```{_lang_tag}
                 {final_chunk_text}
                 ```
                 """

@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # Verilog/SystemVerilog file extensions for validation
-CPP_EXTENSIONS = {".v", ".sv", ".svh", ".vh"}
+HDL_EXTENSIONS = {".v", ".sv", ".svh", ".vh"}
 
 
 class QAInspector:
@@ -29,7 +29,7 @@ class QAInspector:
     1. File integrity checks (UTF-8, non-empty, reasonable size)
     2. Brace/bracket balance validation
     3. Include statement consistency
-    4. Optional compilation check (if gcc/clang available)
+    4. Optional syntax check (if Verible available)
     5. Issue count comparison (original vs fixed)
     """
 
@@ -55,8 +55,8 @@ class QAInspector:
         results = []
 
         # Per-file structural checks
-        cpp_files = self._find_cpp_files()
-        if not cpp_files:
+        hdl_files = self._find_hdl_files()
+        if not hdl_files:
             results.append({
                 "File": "(all)",
                 "Check": "File Discovery",
@@ -71,7 +71,7 @@ class QAInspector:
             "Check": "File Discovery",
             "Status": "PASS",
             "Pass": True,
-            "Details": f"Found {len(cpp_files)} HDL files.",
+            "Details": f"Found {len(hdl_files)} HDL files.",
         })
 
         # Check each file
@@ -80,7 +80,7 @@ class QAInspector:
         brace_pass = 0
         brace_fail = 0
 
-        for fpath in cpp_files:
+        for fpath in hdl_files:
             # File integrity
             integrity = self._check_file_integrity(fpath)
             if integrity["Pass"]:
@@ -103,7 +103,7 @@ class QAInspector:
             "Check": "File Integrity",
             "Status": "PASS" if integrity_fail == 0 else "FAIL",
             "Pass": integrity_fail == 0,
-            "Details": f"{integrity_pass} passed, {integrity_fail} failed out of {len(cpp_files)} files.",
+            "Details": f"{integrity_pass} passed, {integrity_fail} failed out of {len(hdl_files)} files.",
         })
 
         results.append({
@@ -111,11 +111,11 @@ class QAInspector:
             "Check": "Brace Balance",
             "Status": "PASS" if brace_fail == 0 else "FAIL",
             "Pass": brace_fail == 0,
-            "Details": f"{brace_pass} passed, {brace_fail} failed out of {len(cpp_files)} files.",
+            "Details": f"{brace_pass} passed, {brace_fail} failed out of {len(hdl_files)} files.",
         })
 
         # Compilation check (optional)
-        compile_result = self._check_compilation(cpp_files)
+        compile_result = self._check_compilation(hdl_files)
         results.append(compile_result)
 
         # Issue comparison
@@ -124,12 +124,12 @@ class QAInspector:
 
         return results
 
-    def _find_cpp_files(self) -> List[Path]:
+    def _find_hdl_files(self) -> List[Path]:
         """Find all Verilog/SystemVerilog files in the fixed codebase."""
         files = []
         if not self.fixed_path.exists():
             return files
-        for ext in CPP_EXTENSIONS:
+        for ext in HDL_EXTENSIONS:
             files.extend(self.fixed_path.rglob(f"*{ext}"))
         return sorted(files)
 
@@ -254,40 +254,40 @@ class QAInspector:
             }
 
     def _detect_compiler(self) -> Optional[str]:
-        """Detect available C compiler."""
-        for compiler in ["gcc", "clang", "cc"]:
+        """Detect available HDL lint/syntax tool (Verible preferred)."""
+        for tool in ["verible-verilog-lint", "verible-verilog-syntax"]:
             try:
                 result = subprocess.run(
-                    [compiler, "--version"],
+                    [tool, "--version"],
                     capture_output=True,
                     timeout=5,
                 )
                 if result.returncode == 0:
-                    return compiler
+                    return tool
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 continue
         return None
 
     def _check_compilation(self, files: List[Path]) -> Dict[str, Any]:
-        """Attempt syntax-check compilation on source files."""
+        """Attempt syntax-check on HDL source files using Verible."""
         if not self._compiler:
             return {
                 "File": "(all)",
-                "Check": "Compilation",
+                "Check": "Syntax Check",
                 "Status": "SKIP",
                 "Pass": True,  # Non-blocking
-                "Details": "No compiler available (gcc/clang not found). Skipping compilation check.",
+                "Details": "No HDL syntax tool available (verible not found). Skipping syntax check.",
             }
 
-        # Only syntax-check .c files (not headers) with -fsyntax-only
-        source_files = [f for f in files if f.suffix in {".c", ".cpp", ".cc", ".cxx"}]
+        # Syntax-check .v/.sv files (not just headers)
+        source_files = [f for f in files if f.suffix in {".v", ".sv"}]
         if not source_files:
             return {
                 "File": "(all)",
-                "Check": "Compilation",
+                "Check": "Syntax Check",
                 "Status": "SKIP",
                 "Pass": True,
-                "Details": "No source files to compile (only headers found).",
+                "Details": "No top-level HDL source files to check (only headers found).",
             }
 
         errors = []
@@ -295,7 +295,7 @@ class QAInspector:
         for fpath in source_files[:20]:  # Limit to 20 files for speed
             try:
                 result = subprocess.run(
-                    [self._compiler, "-fsyntax-only", "-w", str(fpath)],
+                    [self._compiler, str(fpath)],
                     capture_output=True,
                     timeout=10,
                     text=True,
@@ -306,7 +306,7 @@ class QAInspector:
                     first_error = result.stderr.strip().split("\n")[0][:200]
                     errors.append(f"{rel}: {first_error}")
             except subprocess.TimeoutExpired:
-                errors.append(f"{fpath.name}: compilation timed out")
+                errors.append(f"{fpath.name}: syntax check timed out")
             except Exception as e:
                 errors.append(f"{fpath.name}: {e}")
 
@@ -314,7 +314,7 @@ class QAInspector:
             detail = f"{len(errors)} errors in {checked} files checked. First: {errors[0]}"
             return {
                 "File": "(all)",
-                "Check": "Compilation",
+                "Check": "Syntax Check",
                 "Status": "FAIL",
                 "Pass": False,
                 "Details": detail[:300],
@@ -322,10 +322,10 @@ class QAInspector:
 
         return {
             "File": "(all)",
-            "Check": "Compilation",
+            "Check": "Syntax Check",
             "Status": "PASS",
             "Pass": True,
-            "Details": f"Syntax check passed for {checked} source files using {self._compiler}.",
+            "Details": f"Syntax check passed for {checked} HDL files using {self._compiler}.",
         }
 
     def _compare_issue_counts(self) -> Dict[str, Any]:
@@ -416,17 +416,12 @@ def _strip_comments_and_strings(code: str) -> str:
                 i += 2
                 continue
 
-        # Check for string start
-        if ch in ('"', "'"):
+        # Check for string start (only double-quote in Verilog/SystemVerilog)
+        # Single-quote is used for bit-width literals (8'b0, 32'hFF, '0, '1)
+        if ch == '"':
             in_string = True
-            string_char = ch
+            string_char = '"'
             i += 1
-            continue
-
-        # Check for preprocessor directives (skip entire line)
-        if ch == "#" and (i == 0 or code[i - 1] == "\n"):
-            while i < n and code[i] != "\n":
-                i += 1
             continue
 
         result.append(ch)

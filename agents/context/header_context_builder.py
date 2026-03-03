@@ -1167,3 +1167,7 @@ class HDLContextBuilder:
             "includes_resolved": len(self._include_cache),
             "total_definitions_cached": total_defs,
         }
+
+
+# Backward compatibility alias — agents import this name
+HeaderContextBuilder = HDLContextBuilder
