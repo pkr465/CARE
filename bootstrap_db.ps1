@@ -22,9 +22,9 @@
 $ErrorActionPreference = "Stop"
 
 # ---------- Configurable defaults (match global_config.yaml) ----------
-$DB_USER           = if ($env:DB_USER)           { $env:DB_USER }           else { "codebase_analytics_user" }
+$DB_USER           = if ($env:DB_USER)           { $env:DB_USER }           else { "care_analytics_user" }
 $DB_PASSWORD       = if ($env:DB_PASSWORD)       { $env:DB_PASSWORD }       else { "postgres" }
-$DB_NAME           = if ($env:DB_NAME)           { $env:DB_NAME }           else { "codebase_analytics_db" }
+$DB_NAME           = if ($env:DB_NAME)           { $env:DB_NAME }           else { "care_analytics_db" }
 $DB_HOST           = if ($env:DB_HOST)           { $env:DB_HOST }           else { "localhost" }
 $DB_PORT           = if ($env:DB_PORT)           { $env:DB_PORT }           else { "5432" }
 $DB_ADMIN_USER     = if ($env:DB_ADMIN_USER)     { $env:DB_ADMIN_USER }     else { "postgres" }

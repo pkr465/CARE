@@ -421,7 +421,7 @@ QGENIE_API_KEY=""       # Optional, for QGenie models
 │   ├── vectordb_pipeline.py           # PostgreSQL/pgvector ingestion
 │   ├── vectordb_wrapper.py            # Vector DB connection wrapper
 │   ├── telemetry_service.py           # Usage telemetry service
-│   ├── schema_codebase_analytics.sql   # Analytics tables
+│   ├── schema_care_analytics.sql   # Analytics tables
 │   ├── schema_telemetry.sql            # Telemetry tables
 │   └── pgvector*.sql                   # pgvector extensions & roles
 │
@@ -593,7 +593,7 @@ Switch providers by changing the `llm.llm_provider` and `llm.model` fields in `g
 
 **Verible/Verilator not found:** Install with `sudo apt-get install verible verilator` (Ubuntu) or `brew install verible verilator` (macOS). CARE degrades gracefully to regex when tools are unavailable.
 
-**PostgreSQL connection error:** Check credentials in `global_config.yaml` under `database:`. Test with `psql -h localhost -U codebase_analytics_user -d codebase_analytics_db`.
+**PostgreSQL connection error:** Check credentials in `global_config.yaml` under `database:`. Test with `psql -h localhost -U care_analytics_user -d care_analytics_db`.
 
 **Out of memory:** Use `--memory-limit 4096 --batch-size 2` to reduce footprint.
 

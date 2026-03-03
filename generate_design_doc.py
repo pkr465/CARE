@@ -551,8 +551,8 @@ max_prompt_tokens: 100000                   # Token budget for prompt truncation
 connection: postgresql+psycopg2://...       # SQLAlchemy connection string
 host: localhost                             # Database host
 port: 5432                                  # Database port
-database: codebase_analytics_db             # Database name
-username: codebase_analytics_user           # Application user
+database: care_analytics_db             # Database name
+username: care_analytics_user           # Application user
 password: postgres                         # Password (set in global_config.yaml)
 pool_size: 5                                # Connection pool size
 pool_recycle: 3600                          # Connection recycle timeout

@@ -60,23 +60,23 @@ paths:
 llm:
   # ── Provider toggle ────────────────────────────────────────────────────
   # Switch between "qgenie" and "anthropic" to swap the LLM backend.
-  llm_provider: "anthropic"
-  #llm_provider: "qgenie" # "qgenie" | "anthropic"
+  #llm_provider: "anthropic"
+  llm_provider: "qgenie" # "qgenie" | "anthropic"
 
   # ── Primary analysis model ─────────────────────────────────────────────
 
   # Change this single line to switch the entire engine between providers.
-  #model: "azure::gpt-5.2"
-  model: "anthropic::claude-sonnet-4-20250514"
+  model: "azure::gpt-5.2"
+  #model: "anthropic::claude-sonnet-4-20250514"
 
   # ── Coding / refactoring model (may differ from primary) ───────────────
-  coding_model: "anthropic::claude-sonnet-4-20250514"
+  #coding_model: "anthropic::claude-sonnet-4-20250514"
   #coding_model: "vertexai::gemini-3-pro-preview"
   #coding_model: "anthropic::claude-4-sonnet"
-  #coding_model: "azure::gpt-5.2"
+  coding_model: "azure::gpt-5.2"
   # ── Streamlit / UI model ───────────────────────────────────────────────
-  #streamlit_model: "azure::gpt-5.2"
-  streamlit_model: "anthropic::claude-sonnet-4-20250514"
+  streamlit_model: "azure::gpt-5.2"
+  #streamlit_model: "anthropic::claude-sonnet-4-20250514"
 
   # ── API keys — prefer ${ENV_VAR} overrides for secrets ─────────────────
   llm_api_key: ${LLM_API_KEY}
@@ -111,14 +111,14 @@ embeddings:
 # ----------------------------------------------------------------------------
 database:
   # SQLAlchemy connection string (app user)
-  connection: postgresql+psycopg2://codebase_analytics_user:postgres@localhost/codebase_analytics_db
+  connection: postgresql+psycopg2://care_analytics_user:postgres@localhost/care_analytics_db
 
   host: localhost
   port: 5432
-  database: codebase_analytics_db
+  database: care_analytics_db
 
   # Application user
-  username: codebase_analytics_user
+  username: care_analytics_user
   password: postgres
 
   # Admin credentials (migrations/setup only)
@@ -126,10 +126,10 @@ database:
   admin_password: postgres
 
   # LangChain / pgvector collection tables
-  collection: codebase_analytics_data_2025
+  collection: care_analytics_data_2025
   collection_tablename: langchain_pg_collection
   embedding_tablename: langchain_pg_embedding
-  store_name: codebase_analytics_vector_db
+  store_name: care_analytics_vector_db
 
   # Connection pool tuning
   pool_size: 5              # Number of persistent connections in the pool
@@ -404,7 +404,7 @@ dependency_analysis:
 
 # ────────────────────────────────────────────────────────────────────────────
 # Telemetry — Silent usage tracking for framework analytics
-# Uses the same PostgreSQL database (codebase_analytics_db).
+# Uses the same PostgreSQL database (care_analytics_db).
 # ────────────────────────────────────────────────────────────────────────────
 telemetry:
   enable: true

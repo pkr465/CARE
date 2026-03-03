@@ -1,7 +1,7 @@
 -- CARE — Codebase Analysis & Repair Engine
 -- PostgreSQL Schema for Telemetry & HITL Tables
 -- Run with:
---   psql -U postgres -d codebase_analytics_db -a -e -f db/schema_telemetry.sql
+--   psql -U postgres -d care_analytics_db -a -e -f db/schema_telemetry.sql
 
 ------------------------------------------------------------
 -- 1. Telemetry: Analysis/Fixer/Patch run summaries

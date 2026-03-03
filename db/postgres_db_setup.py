@@ -96,8 +96,8 @@ class PostgresDbSetup:
                 logger.debug("Using EnvConfig for environment configuration")
 
         # Try to get 'admin'/superuser credentials for setup
-        self.admin_user: str = self.env.get('POSTGRES_ADMIN_USERNAME', 'codebase_analytics_pg')
-        self.admin_password: str = self.env.get('POSTGRES_ADMIN_PASSWORD', 'codebase_analytics_pg')
+        self.admin_user: str = self.env.get('POSTGRES_ADMIN_USERNAME', 'care_analytics_pg')
+        self.admin_password: str = self.env.get('POSTGRES_ADMIN_PASSWORD', 'care_analytics_pg')
 
         self.username: str = self.env.get('POSTGRES_USERNAME')
         self.password: str = self.env.get('POSTGRES_PASSWORD')

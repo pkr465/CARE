@@ -1,7 +1,7 @@
 -- CARE — Codebase Analysis & Repair Engine
 -- PostgreSQL Schema Setup for Vector DB
 -- Run with:
---   psql -U postgres -d postgres -a -e -f db/schema_codebase_analytics.sql
+--   psql -U postgres -d postgres -a -e -f db/schema_care_analytics.sql
 
 ------------------------------------------------------------
 -- 1. Create application database if it does not exist
@@ -12,10 +12,10 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1
         FROM pg_database
-        WHERE datname = 'codebase_analytics_db'
+        WHERE datname = 'care_analytics_db'
     ) THEN
-        CREATE DATABASE codebase_analytics_db
-            OWNER codebase_analytics_user;
+        CREATE DATABASE care_analytics_db
+            OWNER care_analytics_user;
     END IF;
 END
 $$;
@@ -24,7 +24,7 @@ $$;
 -- 2. Connect to the application database
 ------------------------------------------------------------
 
-\c codebase_analytics_db
+\c care_analytics_db
 
 ------------------------------------------------------------
 -- 3. Enable pgvector extension (for embeddings)

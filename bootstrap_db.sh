@@ -24,9 +24,9 @@
 set -euo pipefail
 
 # ---------- Configurable defaults (match global_config.yaml) ----------
-DB_USER="${DB_USER:-codebase_analytics_user}"
+DB_USER="${DB_USER:-care_analytics_user}"
 DB_PASSWORD="${DB_PASSWORD:-postgres}"
-DB_NAME="${DB_NAME:-codebase_analytics_db}"
+DB_NAME="${DB_NAME:-care_analytics_db}"
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 

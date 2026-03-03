@@ -4,7 +4,7 @@
 # Note: environment-specific values may need adjustment per deployment
 
 # SQLAlchemy-style connection string for the *app user* (used by your app)
-POSTGRES_CONNECTION=postgresql+psycopg2://codebase_analytics_user:postgres@localhost/codebase_analytics_db
+POSTGRES_CONNECTION=postgresql+psycopg2://care_analytics_user:postgres@localhost/care_analytics_db
 
 # Admin credentials (used only for migrations/setup scripts, if needed)
 # Often this is just the default 'postgres' superuser in local dev.
@@ -12,28 +12,28 @@ POSTGRES_ADMIN_USERNAME=postgres
 POSTGRES_ADMIN_PASSWORD=postgres
 
 # LangChain / pgvector collection configuration
-POSTGRES_COLLECTION=codebase_analytics_data_2025
+POSTGRES_COLLECTION=care_analytics_data_2025
 POSTGRES_COLLECTION_TABLENAME=langchain_pg_collection
 POSTGRES_EMBEDDING_TABLENAME=langchain_pg_embedding
-POSTGRES_STORE_NAME=codebase_analytics_vector_db
+POSTGRES_STORE_NAME=care_analytics_vector_db
 
 # Application DB user (same as in POSTGRES_CONNECTION)
-POSTGRES_USERNAME=codebase_analytics_user
+POSTGRES_USERNAME=care_analytics_user
 POSTGRES_PASSWORD=postgres
 
 # Database name and connection host/port
-POSTGRES_DATABASE=codebase_analytics_db
+POSTGRES_DATABASE=care_analytics_db
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 
 # Variables
 # Variables
 
-# Application database name (matches schema_codebase_analytics.sql)
-DB_NAME="codebase_analytics_db"
+# Application database name (matches schema_care_analytics.sql)
+DB_NAME="care_analytics_db"
 
 # Application DB user (non-superuser; used by your app)
-DB_USER="codebase_analytics_user"
+DB_USER="care_analytics_user"
 
 # Admin/superuser for setup/migrations (often just 'postgres' locally)
 DB_SUPERUSER="postgres"
@@ -45,11 +45,11 @@ DB_PASSWORD="postgres"
 psql -U "$DB_SUPERUSER" -tc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1 || \
 psql -U "$DB_SUPERUSER" -c "CREATE ROLE $DB_USER WITH LOGIN SUPERUSER PASSWORD '$DB_PASSWORD';"
 
-# Create codebase_analytics_db database if it doesn't exist
+# Create care_analytics_db database if it doesn't exist
 psql -U "$DB_SUPERUSER" -tc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1 || \
 psql -U "$DB_SUPERUSER" -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
 
-# Run schema setup inside codebase_analytics_db
+# Run schema setup inside care_analytics_db
 psql -U "$DB_SUPERUSER" -d "$DB_NAME" <<'EOF'
 
 -- Enable pgvector extension

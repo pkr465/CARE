@@ -5,9 +5,9 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1
         FROM pg_roles
-        WHERE rolname = 'codebase_analytics_user'
+        WHERE rolname = 'care_analytics_user'
     ) THEN
-        CREATE ROLE codebase_analytics_user
+        CREATE ROLE care_analytics_user
             WITH LOGIN
                  NOSUPERUSER
                  NOCREATEDB

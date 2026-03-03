@@ -6,7 +6,7 @@ PostgreSQL-backed persistent store for human feedback decisions and constraint
 rules.  Survives across analysis runs so agents can learn from accumulated
 human wisdom.
 
-Migrated from SQLite to PostgreSQL to share the existing codebase_analytics_db.
+Migrated from SQLite to PostgreSQL to share the existing care_analytics_db.
 """
 
 import json
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class FeedbackStore:
     """Persistent storage for HITL feedback decisions and constraint rules.
 
-    Uses PostgreSQL (shared ``codebase_analytics_db``).  Three tables:
+    Uses PostgreSQL (shared ``care_analytics_db``).  Three tables:
 
     * ``hitl_feedback_decisions`` — human review outcomes
     * ``hitl_constraint_rules``  — parsed constraint markdown rules
