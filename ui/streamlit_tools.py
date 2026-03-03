@@ -226,6 +226,36 @@ def app_css() -> None:
             background: {CARE_SURFACE} !important;
             border-radius: 10px !important;
         }}
+        [data-testid="stFileUploader"] label,
+        [data-testid="stFileUploader"] span,
+        [data-testid="stFileUploader"] p,
+        [data-testid="stFileUploader"] [data-testid="stMarkdownContainer"] {{
+            color: {CARE_TEXT} !important;
+        }}
+        /* Browse button inside file uploader */
+        [data-testid="stFileUploader"] button,
+        [data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {{
+            background: linear-gradient(135deg, {CARE_PRIMARY}, {CARE_ACCENT}) !important;
+            color: #061220 !important;
+            border: none !important;
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+        }}
+        [data-testid="stFileUploader"] button:hover,
+        [data-testid="stFileUploader"] [data-testid="baseButton-secondary"]:hover {{
+            box-shadow: 0 0 15px rgba(0,212,170,0.25) !important;
+            opacity: 0.9;
+        }}
+        /* Drag-and-drop zone text */
+        [data-testid="stFileDropzoneInstructions"] {{
+            color: {CARE_TEXT_SECONDARY} !important;
+        }}
+        [data-testid="stFileDropzoneInstructions"] span {{
+            color: {CARE_TEXT_SECONDARY} !important;
+        }}
+        [data-testid="stFileDropzoneInstructions"] small {{
+            color: {CARE_TEXT_SECONDARY} !important;
+        }}
 
         /* ── Feedback row ────────────────────────────────────────── */
         .feedback-row {{

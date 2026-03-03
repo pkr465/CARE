@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
 # ============================================================================
 # CARE — Codebase Analysis & Repair Engine
-# Launch script — starts the Streamlit dashboard and optionally opens the
-# silicon design website.
+# Launch script — opens the CARE website (index.html) and starts the
+# Streamlit dashboard in the background.
+#
+# Flow:
+#   1. Activates virtual environment & loads .env
+#   2. Starts Streamlit dashboard (headless) on the configured port
+#   3. Opens index.html in the default browser
+#   4. User clicks "Start Analysis" on the website → navigates to dashboard
 #
 # Usage:
-#   ./launch.sh              # Launch dashboard only
-#   ./launch.sh --website    # Launch dashboard + open website
+#   ./launch.sh              # Launch website + dashboard
+#   ./launch.sh --no-site    # Launch dashboard only (open Streamlit directly)
 #   ./launch.sh --port 8503  # Custom port
 #   ./launch.sh --help       # Show help
 #
 # Environment:
 #   STREAMLIT_PORT=8502      Override default port
-#   CARE_NO_BROWSER=1        Don't auto-open browser
+#   CARE_NO_BROWSER=1        Don't auto-open any browser window
 # ============================================================================
 
 set -euo pipefail
@@ -31,27 +37,27 @@ cd "$SCRIPT_DIR"
 
 # ── Defaults ────────────────────────────────────────────────────────────────
 PORT="${STREAMLIT_PORT:-8502}"
-OPEN_WEBSITE=false
+OPEN_SITE=true
 VENV_DIR=".venv"
 
 # ── Parse args ──────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --website|-w)   OPEN_WEBSITE=true; shift ;;
-        --port|-p)      PORT="$2"; shift 2 ;;
+        --no-site|--dashboard-only)  OPEN_SITE=false; shift ;;
+        --port|-p)                   PORT="$2"; shift 2 ;;
         --help|-h)
             echo "CARE Launch Script"
             echo ""
             echo "Usage: ./launch.sh [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --website, -w    Also open the silicon design website"
-            echo "  --port, -p PORT  Set Streamlit port (default: 8502)"
-            echo "  --help, -h       Show this help"
+            echo "  --no-site          Skip opening the website; open Streamlit directly"
+            echo "  --port, -p PORT    Set Streamlit port (default: 8502)"
+            echo "  --help, -h         Show this help"
             echo ""
             echo "Environment:"
-            echo "  STREAMLIT_PORT   Override default port"
-            echo "  CARE_NO_BROWSER  Set to 1 to skip auto-opening browser"
+            echo "  STREAMLIT_PORT     Override default port"
+            echo "  CARE_NO_BROWSER    Set to 1 to skip auto-opening any browser window"
             exit 0
             ;;
         *) echo "Unknown option: $1. Use --help for usage."; exit 1 ;;
@@ -116,34 +122,41 @@ finally: s.close()
 
 # ── Print access info ──────────────────────────────────────────────────────
 echo ""
-echo -e "  ${BOLD}Dashboard URLs:${NC}"
-echo -e "    Local:   ${CYAN}http://localhost:${PORT}${NC}"
-echo -e "    Network: ${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
+echo -e "  ${BOLD}URLs:${NC}"
+if [[ "$OPEN_SITE" == "true" && -f "index.html" ]]; then
+    echo -e "    Website:   ${CYAN}file://${SCRIPT_DIR}/index.html${NC}"
+fi
+echo -e "    Dashboard: ${CYAN}http://localhost:${PORT}${NC}"
+echo -e "    Network:   ${CYAN}http://${LOCAL_IP}:${PORT}${NC}"
 echo ""
 
-# ── Open website in browser ─────────────────────────────────────────────────
-if [[ "$OPEN_WEBSITE" == "true" && -f "index.html" ]]; then
-    echo -e "${GREEN}[✓]${NC} Opening silicon design website..."
-    case "$(uname -s)" in
-        Darwin)  open "index.html" 2>/dev/null || true ;;
-        Linux)   xdg-open "index.html" 2>/dev/null || true ;;
-    esac
+# ── Open browser ───────────────────────────────────────────────────────────
+if [[ "${CARE_NO_BROWSER:-0}" != "1" ]]; then
+    if [[ "$OPEN_SITE" == "true" && -f "index.html" ]]; then
+        # Open the CARE website — user clicks "Start Analysis" to reach dashboard
+        echo -e "${GREEN}[✓]${NC} Opening CARE website in browser..."
+        case "$(uname -s)" in
+            Darwin)  open "index.html" 2>/dev/null || true ;;
+            Linux)   xdg-open "index.html" 2>/dev/null || true ;;
+        esac
+    else
+        # --no-site mode: open Streamlit directly (after a brief delay for startup)
+        echo -e "${GREEN}[✓]${NC} Opening dashboard in browser (after startup)..."
+        (sleep 3 && case "$(uname -s)" in
+            Darwin)  open "http://localhost:${PORT}" 2>/dev/null || true ;;
+            Linux)   xdg-open "http://localhost:${PORT}" 2>/dev/null || true ;;
+        esac) &
+    fi
 fi
 
-# ── Launch Streamlit ────────────────────────────────────────────────────────
+# ── Launch Streamlit (headless — browser handled above) ────────────────────
 echo -e "${GREEN}[✓]${NC} Starting Streamlit dashboard on port ${PORT}..."
 echo -e "    Press ${BOLD}Ctrl+C${NC} to stop"
 echo ""
 
 export STREAMLIT_PORT="$PORT"
 
-# Honor CARE_NO_BROWSER — headless=true suppresses auto-open
-HEADLESS="false"
-if [[ "${CARE_NO_BROWSER:-0}" == "1" ]]; then
-    HEADLESS="true"
-fi
-
 exec python -m streamlit run "$APP_PATH" \
     --server.port "$PORT" \
-    --server.headless "$HEADLESS" \
+    --server.headless true \
     --browser.gatherUsageStats false
