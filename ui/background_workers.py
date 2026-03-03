@@ -323,8 +323,8 @@ def run_analysis_background(
         ui_exclude_headers = config.get("exclude_headers", [])
         if global_config and ui_exclude_headers:
             ctx_data = global_config._data.setdefault("context", {})
-            existing = ctx_data.get("exclude_headers", []) or []
-            ctx_data["exclude_headers"] = list(dict.fromkeys(existing + ui_exclude_headers))
+            existing = ctx_data.get("exclude_includes", []) or []
+            ctx_data["exclude_includes"] = list(dict.fromkeys(existing + ui_exclude_headers))
 
         # Initialize LLMTools (router auto-selects provider from config)
         llm_tools = None
@@ -966,8 +966,8 @@ def run_patch_analysis_background(
         ui_exclude_headers = config.get("exclude_headers", [])
         if global_config and ui_exclude_headers:
             ctx_data = global_config._data.setdefault("context", {})
-            existing = ctx_data.get("exclude_headers", []) or []
-            ctx_data["exclude_headers"] = list(dict.fromkeys(existing + ui_exclude_headers))
+            existing = ctx_data.get("exclude_includes", []) or []
+            ctx_data["exclude_includes"] = list(dict.fromkeys(existing + ui_exclude_headers))
 
         # Initialize LLM
         llm_tools = None

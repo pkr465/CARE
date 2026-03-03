@@ -204,8 +204,30 @@ class CodebaseLLMAgent:
                 try:
                     # Config keys match global_config.yaml context section
                     inc_paths = context_cfg.get("hdl_include_paths", [])
+
+                    # Resolve codebase root for header resolution.
+                    # When files are uploaded, self.codebase_path points to a
+                    # temp staging dir (e.g. ./out/_uploads) that lacks the
+                    # full project tree.  Use paths.code_base_path from
+                    # global_config.yaml if available and valid — it points to
+                    # the real HDL project root where headers can be found.
+                    header_codebase = str(self.codebase_path)
+                    if self.config:
+                        cfg_code_base = self.config.get("paths.code_base_path", "")
+                        if cfg_code_base:
+                            cfg_path = Path(cfg_code_base)
+                            if not cfg_path.is_absolute():
+                                cfg_path = Path.cwd() / cfg_path
+                            cfg_path = cfg_path.resolve()
+                            if cfg_path.is_dir():
+                                header_codebase = str(cfg_path)
+                                logger.info(
+                                    f"  Header context using config codebase: "
+                                    f"{header_codebase} (analysis path: {self.codebase_path})"
+                                )
+
                     self.header_context_builder = HeaderContextBuilder(
-                        codebase_path=str(self.codebase_path),
+                        codebase_path=header_codebase,
                         include_paths=inc_paths if isinstance(inc_paths, list) else [],
                         max_header_depth=int(context_cfg.get("max_include_depth", 2)),
                         max_context_chars=int(context_cfg.get("max_context_chars", 6000)),
@@ -216,8 +238,8 @@ class CodebaseLLMAgent:
                     )
                     logger.info(
                         f"[*] Header Context Builder ENABLED "
-                        f"(codebase_path={self.codebase_path}, "
-                        f"include_paths={inc_paths})"
+                        f"(codebase_path={header_codebase}, "
+                        f"include_paths={self.header_context_builder.include_paths})"
                     )
                 except Exception as hcb_err:
                     logger.warning(f"Failed to initialize HeaderContextBuilder: {hcb_err}")

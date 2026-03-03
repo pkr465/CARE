@@ -288,8 +288,22 @@ class CodebasePatchAgent:
                             }
                     except Exception:
                         pass
+                # Resolve codebase root for header resolution.
+                # Use paths.code_base_path from global config if available
+                # (the analysis path may be a temp dir like ./out/_uploads).
+                header_codebase = str(self.codebase_path)
+                if self.config and hasattr(self.config, 'get'):
+                    cfg_code_base = self.config.get("paths.code_base_path", "")
+                    if cfg_code_base:
+                        _cfg_path = Path(cfg_code_base)
+                        if not _cfg_path.is_absolute():
+                            _cfg_path = Path.cwd() / _cfg_path
+                        _cfg_path = _cfg_path.resolve()
+                        if _cfg_path.is_dir():
+                            header_codebase = str(_cfg_path)
+
                 self.header_context_builder = HeaderContextBuilder(
-                    codebase_path=str(self.codebase_path),
+                    codebase_path=header_codebase,
                     **hdr_cfg,
                 )
                 # Also store as _header_builder for _resolve_file_includes() compat
