@@ -86,13 +86,56 @@ CARE is structured as a layered, multi-agent system. The diagram below shows the
 
 The `StaticAnalyzerAgent` runs 7 phases in sequence:
 
-1. **File Discovery** — Scans the codebase for `.v`, `.sv`, `.svh`, `.vh` files; caches source with per-file metrics.
+1. **File Discovery** — Scans the codebase for `.v`, `.sv`, `.svh`, `.vh` HDL source files; caches source with per-file metrics.
+1b. **Design Context Building** — Discovers and parses constraint/configuration files (`.sdc`, `.tcl`, `.swl`, `.blk`, `.vblk`, `.desc`) to build a unified `DesignContext` with clock definitions, timing constraints, DRC waivers, block hierarchy, and register maps.
 2. **Source Parsing** — Extracts module definitions, interfaces, packages, port lists, and parameter declarations.
 3. **Hierarchy Building** — Constructs the module instantiation graph using regex (or Verible when available).
-4. **9 HDL Analyzers** — Runs all analyzers via `MetricsCalculator` producing per-file and aggregate scores.
+4. **9 HDL Analyzers** — Runs all analyzers via `MetricsCalculator` producing per-file and aggregate scores. Analyzers receive the `DesignContext` for enriched analysis (e.g., CDC analyzer uses SDC-defined clocks instead of regex inference; Synthesis Safety applies DRC waivers from `.swl` files).
 5. **Metric Aggregation** — Computes weighted health score (0–100, A–F grade) with gate conditions for critical issues.
 6. **Report Generation** — Writes `designhealth.json`, Excel workbooks, optional HTML reports, and email notifications.
 7. **Visualization** — Generates Mermaid diagrams for module hierarchy, dependency graphs, and architecture views.
+
+---
+
+## Supported File Types
+
+CARE scans two categories of files:
+
+**HDL Source Files** — analyzed by all 9 analyzers and LLM agents:
+
+| Extension | Language | Description |
+|---|---|---|
+| `.v` | Verilog | Verilog source files |
+| `.sv` | SystemVerilog | SystemVerilog source files |
+| `.svh` | SystemVerilog | SystemVerilog header files |
+| `.vh` | Verilog | Verilog header files |
+
+**Design Constraint & Context Files** — parsed to enrich analyzer and LLM accuracy:
+
+| Extension | Type | Description | Parser |
+|---|---|---|---|
+| `.sdc` | Timing Constraints | Synopsys Design Constraints — clock definitions, false paths, I/O delays, clock groups | SDCParser |
+| `.tcl` | Synthesis Scripts | Tool Command Language — `set_dont_touch`, `set_max_fanout`, synthesis attributes | TCLParser |
+| `.swl` | DRC Waivers | PLD Rule Check waivers — suppress known-good DRC violations by rule ID, scope, target | SWLParser |
+| `.blk` | Block Descriptors | Block-level hierarchy — parent/child relationships, power domains, port lists | BLKParser |
+| `.vblk` | Virtual Blocks | Virtual block/partition definitions — power intent, UPF-style annotations | VBLKParser |
+| `.desc` | Register Maps | Design descriptors — register address maps, field definitions, access types | DESCParser |
+
+---
+
+## Design Context Integration
+
+When constraint files are present in the codebase, CARE's Phase 1B builds a unified `DesignContext` object that is injected into analyzers and LLM agents. This provides several accuracy improvements:
+
+**CDC Analyzer** — Uses SDC-defined clocks (`create_clock`) as the authoritative domain list instead of inferring from `posedge`/`negedge` patterns. False paths declared via `set_false_path` automatically downgrade matching CDC violations to informational. Clock groups from `set_clock_groups` identify intentionally asynchronous domains.
+
+**Synthesis Safety Analyzer** — Filters detected DRC violations against `.swl` waivers. Waived violations are still reported but flagged with `waived: true` and don't count toward score deductions.
+
+**Signal Integrity Analyzer** — Uses block boundary definitions from `.blk` files to understand hierarchical partitions when checking port connections.
+
+**LLM Agents** — A formatted design context summary (clocks, constraints, waivers, blocks, registers) is injected into each code chunk's context window, giving the LLM awareness of timing intent and design structure.
+
+Configuration is in the `design_context` section of `global_config.yaml` — see the Configuration section below for details.
 
 ---
 
@@ -102,7 +145,7 @@ CARE ships with 9 specialized HDL analyzers that run on every analysis. Each pro
 
 ### CDC Analyzer (Clock Domain Crossing)
 
-Detects signals crossing clock domains without proper synchronization. Identifies distinct clock domains by parsing `posedge`/`negedge` edge references (excluding reset signals like `rst_n`), then checks each always/module block for multi-clock usage.
+Detects signals crossing clock domains without proper synchronization. Identifies distinct clock domains by parsing `posedge`/`negedge` edge references (excluding reset signals like `rst_n`), then checks each always/module block for multi-clock usage. When SDC constraints are available, uses declared clocks as the authoritative domain list and suppresses false-path-waived crossings.
 
 **Detects:** single-flop synchronizers (need 2+ stages), multi-bit CDC without gray code or handshake, combinational paths across clock domains, reset domain crossing violations.
 
@@ -228,6 +271,7 @@ Hierarchical YAML configuration with `${ENV_VAR}` substitution for secrets:
 | `llm` | Provider toggle (`anthropic`/`qgenie`), model selection (`provider::model`), API keys, request defaults |
 | `database` | PostgreSQL connection, SSL, pool tuning, vector DB backend |
 | `scanning` | Directory/glob exclusions for HDL analysis (sim_results, synthesis, .Xil, etc.) |
+| `design_context` | Constraint file discovery patterns, injection toggles (SDC clocks, false paths, DRC waivers, block boundaries), LLM context size limit |
 | `hierarchy_builder` | Verible/Verilator executables, timeouts, cache settings, hierarchy depth limits |
 | `context` | Include file resolution depth, max context chars, system package exclusions |
 | `synthesis` | Target technology (fpga/asic), clock period, reset strategy |
@@ -266,7 +310,16 @@ QGENIE_API_KEY=""       # Optional, for QGenie models
 ├── sample_rtl/                         # Sample Verilog/SV files for testing
 │   ├── good/                           #   Clean, synthesisable references
 │   ├── buggy/                          #   Intentional bugs (CDC, latch, synth hazards)
-│   └── mixed/                          #   Functional but with style issues
+│   ├── mixed/                          #   Functional but with style issues
+│   ├── constraints/                    #   SDC timing + TCL synthesis directives
+│   │   ├── timing.sdc                  #     Clocks, false paths, I/O delays
+│   │   └── synthesis.tcl               #     dont_touch, max_fanout, attributes
+│   ├── pldrc/                          #   DRC waiver files
+│   │   └── waivers.swl                 #     3 DRC waivers for sample_rtl issues
+│   ├── blocks/                         #   Block hierarchy definitions
+│   │   └── top.blk                     #     SoC block hierarchy + power domains
+│   └── regs/                           #   Register map descriptors
+│       └── uart_regs.desc              #     UART TX register map (6 registers)
 │
 ├── agents/
 │   ├── codebase_static_agent.py        # Unified 7-phase HDL analysis pipeline
@@ -313,7 +366,9 @@ QGENIE_API_KEY=""       # Optional, for QGenie models
 │   │   ├── metrics_calculator.py       #   Analyzer orchestration & scoring
 │   │   └── verible_parser_wrapper.py   #   Verible AST integration
 │   │
-│   ├── context/                        # LLM context builders
+│   ├── context/                        # Design + LLM context builders
+│   │   ├── design_context.py           #   Dataclasses for clocks, constraints, waivers, blocks, registers
+│   │   ├── design_context_builder.py   #   6 parsers (SDC, TCL, SWL, BLK, VBLK, DESC) + orchestrator
 │   │   └── header_context_builder.py   #   Include/macro context injection
 │   │
 │   ├── prompts/                        # LLM prompt templates

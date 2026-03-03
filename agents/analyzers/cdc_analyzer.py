@@ -31,13 +31,27 @@ class CDCAnalyzer(RuntimeAnalyzerBase):
     _FF_PATTERN = re.compile(r"reg\s+\w+\s*=\s*\w+")  # FF chains
     _GRAY_PATTERN = re.compile(r"gray|grey", re.IGNORECASE)
 
-    def analyze(self, file_cache: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def analyze(self, file_cache: List[Dict[str, Any]], **kwargs) -> Dict[str, Any]:
         """
         Batch CDC analysis across files.
+
+        When design_context is provided (from .sdc constraint files), uses:
+        - SDC clock definitions as authoritative domain list
+        - False-path constraints to suppress intentional CDC crossings
+        - Clock groups to understand async/exclusive relationships
         """
+        design_context = kwargs.get("design_context")
         issues = []
         metrics = []
         clock_domains: Set[str] = set()
+        sdc_clocks_used = False
+        false_paths_applied = 0
+
+        # If SDC provides clock definitions, use them as authority
+        if design_context and hasattr(design_context, "clocks") and design_context.clocks:
+            sdc_clocks_used = True
+            for clk_name in design_context.clocks:
+                clock_domains.add(clk_name)
 
         for entry in file_cache:
             if entry.get("suffix", "").lower() not in {".v", ".sv", ".vh", ".svh"}:
@@ -51,9 +65,30 @@ class CDCAnalyzer(RuntimeAnalyzerBase):
             issues.extend(result["issues"])
             metrics.append(result["metrics"])
 
-            # Collect clock domains
+            # Collect clock domains from HDL (supplement SDC if available)
             for clk in result.get("clocks_detected", []):
                 clock_domains.add(clk)
+
+        # Filter issues against SDC false paths
+        if design_context and hasattr(design_context, "false_paths"):
+            filtered_issues = []
+            for issue in issues:
+                is_waived = False
+                for fp in design_context.false_paths:
+                    from_sig = fp.from_signal or fp.from_clock or ""
+                    to_sig = fp.to_signal or fp.to_clock or ""
+                    # Check if any false-path signal names appear in the issue text
+                    if from_sig and to_sig and from_sig in issue and to_sig in issue:
+                        is_waived = True
+                        false_paths_applied += 1
+                        break
+                if is_waived:
+                    filtered_issues.append(
+                        f"[INFO — waived by SDC false_path] {issue}"
+                    )
+                else:
+                    filtered_issues.append(issue)
+            issues = filtered_issues
 
         # Aggregate warnings if multiple clock domains without proper CDC
         if len(clock_domains) > 1:
@@ -63,6 +98,8 @@ class CDCAnalyzer(RuntimeAnalyzerBase):
             "metrics": metrics,
             "issues": issues,
             "clock_domains": sorted(list(clock_domains)),
+            "sdc_clocks_used": sdc_clocks_used,
+            "false_paths_applied": false_paths_applied,
         }
 
     def analyze_single_file(self, source: str, rel_path: str) -> Dict[str, Any]:

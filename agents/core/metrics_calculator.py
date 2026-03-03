@@ -114,10 +114,17 @@ class MetricsCalculator:
         self,
         file_cache: List[Dict[str, Any]],
         hierarchy_graph: Dict[str, Any],
+        design_context: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Calculate comprehensive health metrics for a Verilog/SystemVerilog HDL codebase.
+
+        Args:
+            file_cache: List of file cache entries from FileProcessor.
+            hierarchy_graph: Module hierarchy graph from DependencyAnalyzer.
+            design_context: Optional DesignContext from constraint files (.sdc, .tcl, .swl, etc.)
         """
+        self.design_context = design_context
         metrics: Dict[str, Any] = {}
 
         # 1. Hierarchy/Module Dependency
@@ -133,7 +140,9 @@ class MetricsCalculator:
         self._write_metric_report("complexity_score", metrics["complexity_score"])
 
         # 4. Synthesis Safety (HDL-specific: CDC, uninitialized signals, signal integrity)
-        metrics["synthesis_risk_score"] = self._calculate_synthesis_risk_score(file_cache)
+        metrics["synthesis_risk_score"] = self._calculate_synthesis_risk_score(
+            file_cache, design_context=design_context
+        )
         self._write_metric_report("synthesis_risk_score", metrics["synthesis_risk_score"])
 
         # 5. Lint Score
@@ -273,7 +282,10 @@ class MetricsCalculator:
     # Synthesis Risk Score (HDL-specific)
     # ------------------------------------------------------------------ #
 
-    def _calculate_synthesis_risk_score(self, file_cache: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _calculate_synthesis_risk_score(
+        self, file_cache: List[Dict[str, Any]],
+        design_context: Optional[Any] = None,
+    ) -> Dict[str, Any]:
         """
         Runs comprehensive HDL synthesis risk analyzers and computes a risk score.
 
@@ -281,11 +293,16 @@ class MetricsCalculator:
         - Clock Domain Crossing (CDC) issues
         - Uninitialized signals
         - Signal integrity issues
+
+        When design_context is provided, analyzers use SDC clock definitions,
+        false-path constraints, DRC waivers, and block boundaries for accuracy.
         """
-        # Execute HDL Analyzers
-        cdc_res = self.cdc_analyzer.analyze(file_cache)
+        # Execute HDL Analyzers (with design context when available)
+        cdc_res = self.cdc_analyzer.analyze(file_cache, design_context=design_context)
         uninitialized_res = self.uninitialized_signal_analyzer.analyze(file_cache)
-        signal_integrity_res = self.signal_integrity_analyzer.analyze(file_cache)
+        signal_integrity_res = self.signal_integrity_analyzer.analyze(
+            file_cache, design_context=design_context
+        )
 
         # Aggregate Issues
         all_issues = []

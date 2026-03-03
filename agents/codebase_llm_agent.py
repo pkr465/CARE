@@ -215,6 +215,7 @@ class CodebaseLLMAgent:
 
         self.is_indexed = False
         self.hitl_context = hitl_context
+        self.design_context = None  # Set externally via set_design_context()
 
         # --- Header Context Builder (context-aware analysis) ---
         self.header_context_builder = None
@@ -713,6 +714,25 @@ class CodebaseLLMAgent:
                     except Exception as fpv_err:
                         logger.debug(f"    Param validation failed: {fpv_err}")
 
+                # 2f. Design Context (clock definitions, timing constraints, DRC waivers)
+                design_context_str = ""
+                if self.design_context and hasattr(self.design_context, "to_context_string"):
+                    try:
+                        dc_cfg = self.config.get("design_context", {}) if self.config else {}
+                        inject_cfg = dc_cfg.get("injection", {}) if isinstance(dc_cfg, dict) else {}
+                        max_dc_chars = int(inject_cfg.get("llm_context_max_chars", 2000))
+                        if inject_cfg.get("inject_to_llm", True):
+                            design_context_str = self.design_context.to_context_string(
+                                max_chars=max_dc_chars
+                            )
+                            if design_context_str:
+                                logger.debug(
+                                    f"    Design context for chunk {chunk_idx+1}: "
+                                    f"{len(design_context_str)} chars injected"
+                                )
+                    except Exception as dc_err:
+                        logger.debug(f"    Design context injection failed: {dc_err}")
+
                 # 3. Context Construction (Previous Chunk Tail + Dependencies + Header Defs)
                 context_header = ""
                 if prev_chunk_tail:
@@ -746,6 +766,11 @@ class CodebaseLLMAgent:
                 if param_validation_context:
                     context_header += (
                         f"\n{param_validation_context}\n"
+                    )
+
+                if design_context_str:
+                    context_header += (
+                        f"\n{design_context_str}\n"
                     )
 
                 final_chunk_text = (

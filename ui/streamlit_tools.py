@@ -931,7 +931,7 @@ def folder_browser(
         show_files: If True and file_extensions is set, opens a native
                     file picker instead of a folder picker.
         file_extensions: If set, opens a file picker filtered to these
-                        extensions (e.g. [".c", ".cpp", ".h"]).
+                        extensions (e.g. [".v", ".sv", ".svh", ".vh"]).
         help_text: Tooltip / help string for the text input.
 
     Returns:

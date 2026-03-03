@@ -34,6 +34,9 @@ class FileProcessor:
         | VHDL_EXTS
     )
 
+    # Design constraint / configuration file extensions (parsed for context, not as HDL source)
+    CONSTRAINT_FILE_EXTS = {".sdc", ".xdc", ".pdc", ".tcl", ".swl", ".blk", ".vblk", ".desc"}
+
     # Default exclusions for HDL projects
     DEFAULT_EXCLUDE_DIRS = {
         ".git",
@@ -57,7 +60,6 @@ class FileProcessor:
         ".vs",
         "__pycache__",
         ".pytest_cache",
-        "constraints",
         ".ipynb_checkpoints",
     }
 
@@ -82,9 +84,7 @@ class FileProcessor:
         "*.pdf",
         "*.doc",
         "*.docx",
-        "*.xdc",  # Xilinx constraint files
-        "*.sdc",  # Synopsys constraint files
-        "*.pdc",  # Lattice constraint files
+        # .xdc, .sdc, .pdc now discovered as design context (constraint files)
         "*_tb.sv",  # Testbench exclusion (optional)
         "*_tb.v",
     ]

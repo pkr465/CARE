@@ -177,6 +177,47 @@ scanning:
     - "*/generated/*"
 
 # ----------------------------------------------------------------------------
+# Design Context — Constraint file discovery and parsing
+# Enriches analyzers and LLM agents with timing, DRC, and block context
+# Supports: .sdc, .tcl, .swl (pldrc waivers), .blk, .vblk, .desc
+# ----------------------------------------------------------------------------
+design_context:
+  enable: true
+
+  # File discovery patterns (glob, relative to codebase root)
+  discovery:
+    sdc_patterns:
+      - "**/*.sdc"
+    tcl_patterns:
+      - "**/*.tcl"
+    swl_patterns:
+      - "**/pldrc/**/*.swl"
+      - "**/waivers/**/*.swl"
+      - "**/*.swl"
+    blk_patterns:
+      - "**/*.blk"
+    vblk_patterns:
+      - "**/*.vblk"
+    desc_patterns:
+      - "**/*.desc"
+
+  # Context injection settings
+  injection:
+    use_sdc_clocks: true         # CDC analyzer uses SDC clock definitions
+    use_false_paths: true        # CDC analyzer suppresses false-path crossings
+    use_clock_groups: true       # CDC analyzer uses async/exclusive clock groups
+    use_drc_waivers: true        # Synthesis Safety filters waived DRC violations
+    use_block_boundaries: true   # Signal Integrity uses block hierarchy context
+    inject_to_llm: true          # LLM agents receive design context in prompts
+    llm_context_max_chars: 2000  # Max chars of design context per LLM chunk
+
+  # Directories/patterns to exclude from constraint file discovery
+  exclude_patterns:
+    - "**/vendor/**"
+    - "**/generated/**"
+    - ".Xil/**"
+
+# ----------------------------------------------------------------------------
 # Logging & Debugging
 # ----------------------------------------------------------------------------
 logging:

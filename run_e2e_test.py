@@ -5,6 +5,10 @@ End-to-End Test Harness for CARE Analyzers on sample_rtl/
 Runs all 6 analyzers directly against sample files, bypassing the full
 pipeline's heavy dependencies (networkx, rich, tqdm, etc.).
 
+Also tests design context integration — parses constraint files (.sdc,
+.tcl, .swl, .blk, .desc) and passes the resulting DesignContext to
+analyzers for enriched analysis (SDC clocks, DRC waivers, block context).
+
 Outputs a comprehensive JSON report and prints a summary table.
 """
 
@@ -28,6 +32,15 @@ from agents.analyzers.signal_integrity_analyzer import SignalIntegrityAnalyzer
 from agents.analyzers.uninitialized_signal_analyzer import UninitializedSignalAnalyzer
 from agents.analyzers.quality_analyzer import QualityAnalyzer
 from agents.analyzers.complexity_analyzer import ComplexityAnalyzer
+
+# ── Import design context (constraint file parsing) ───────────────────────
+try:
+    from agents.context.design_context import DesignContext
+    from agents.context.design_context_builder import DesignContextBuilder
+    DESIGN_CONTEXT_AVAILABLE = True
+except ImportError as e:
+    DESIGN_CONTEXT_AVAILABLE = False
+    print(f"  ⚠ Design context modules not available: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -79,7 +92,7 @@ def severity_emoji(sev: str) -> str:
 # Run all analyzers on a directory
 # ═══════════════════════════════════════════════════════════════════════════
 
-def run_all_analyzers(directory: str, label: str) -> Dict[str, Any]:
+def run_all_analyzers(directory: str, label: str, design_context=None) -> Dict[str, Any]:
     """Run all 6 analyzers on a directory and return combined results."""
     print(f"\n{'='*72}")
     print(f"  ANALYZING: {label}")
@@ -99,15 +112,21 @@ def run_all_analyzers(directory: str, label: str) -> Dict[str, Any]:
         "analyzers": {},
     }
 
+    dc_kwargs = {"design_context": design_context} if design_context else {}
+
     # ── 1. CDC Analyzer ───────────────────────────────────────────────────
     print(f"\n  [1/6] CDC Analyzer ...")
     try:
         cdc = CDCAnalyzer()
-        cdc_result = cdc.analyze(file_cache)
+        cdc_result = cdc.analyze(file_cache, **dc_kwargs)
         results["analyzers"]["cdc"] = cdc_result
         issue_count = len(cdc_result.get("issues", []))
         clock_domains = cdc_result.get("clock_domains", [])
+        sdc_used = cdc_result.get("sdc_clocks_used", False)
+        fp_applied = cdc_result.get("false_paths_applied", 0)
         print(f"        Issues: {issue_count} | Clock domains: {clock_domains}")
+        if sdc_used:
+            print(f"        📋 SDC clocks used as authority | False paths applied: {fp_applied}")
         for iss in cdc_result.get("issues", []):
             print(f"        🟠 {iss}")
     except Exception as e:
@@ -118,12 +137,18 @@ def run_all_analyzers(directory: str, label: str) -> Dict[str, Any]:
     print(f"\n  [2/6] Synthesis Safety Analyzer ...")
     try:
         synth = SynthesisSafetyAnalyzer(codebase_path=directory)
-        synth_result = synth.analyze(file_cache)
+        synth_result = synth.analyze(file_cache, **dc_kwargs)
         results["analyzers"]["synthesis_safety"] = synth_result
         score = synth_result.get("score", "N/A")
         grade = synth_result.get("grade", "N/A")
         total_violations = synth_result.get("metrics", {}).get("total_violations", 0)
+        waivers_applied = synth_result.get("metrics", {}).get("waivers_applied", 0)
         print(f"        Score: {score}/100 | Grade: {grade} | Violations: {total_violations}")
+        if waivers_applied:
+            waived = synth_result.get("metrics", {}).get("waived_violations", [])
+            print(f"        📋 DRC waivers applied: {waivers_applied}")
+            for w in waived:
+                print(f"           ✓ {w.get('rule', '?')}: {w.get('waiver_reason', 'waived')}")
         # Show top violations
         top = synth_result.get("metrics", {}).get("top_violation_types", [])
         for v in top[:10]:
@@ -146,7 +171,7 @@ def run_all_analyzers(directory: str, label: str) -> Dict[str, Any]:
     print(f"\n  [3/6] Signal Integrity Analyzer ...")
     try:
         sig = SignalIntegrityAnalyzer()
-        sig_result = sig.analyze(file_cache)
+        sig_result = sig.analyze(file_cache, **dc_kwargs)
         results["analyzers"]["signal_integrity"] = sig_result
         issue_count = len(sig_result.get("issues", []))
         print(f"        Issues: {issue_count}")
@@ -249,13 +274,76 @@ def main():
     print(f"║         {datetime.now().strftime('%Y-%m-%d %H:%M:%S'):>42s}          ║")
     print("╚══════════════════════════════════════════════════════════════════════╝")
 
+    # ── Build design context from constraint files ─────────────────────────
+    design_context = None
+    if DESIGN_CONTEXT_AVAILABLE:
+        print("\n" + "─" * 72)
+        print("  DESIGN CONTEXT — Parsing constraint files")
+        print("─" * 72)
+        try:
+            builder = DesignContextBuilder(codebase_path=str(sample_dir))
+            design_context = builder.build_context()
+
+            # Print summary
+            clk_count = len(design_context.clocks)
+            tc_count = len(design_context.timing_constraints)
+            fp_count = len(design_context.false_paths)
+            cg_count = len(design_context.clock_groups)
+            waiver_count = sum(len(v) for v in design_context.drc_waivers.values())
+            blk_count = len(design_context.blocks)
+            reg_count = len(design_context.register_maps)
+            dir_count = len(design_context.synthesis_directives)
+            disc = design_context.discovered_files
+
+            print(f"  Constraint files discovered:")
+            for ext, files in disc.items():
+                if files:
+                    print(f"    {ext}: {len(files)} file(s)")
+                    for f in files:
+                        print(f"      - {f}")
+
+            print(f"\n  Design context summary:")
+            print(f"    Clocks:               {clk_count}")
+            for cname, cdef in design_context.clocks.items():
+                print(f"      • {cname}: {cdef.period_ns}ns (port: {cdef.source_port or '—'})")
+            print(f"    Timing constraints:   {tc_count}")
+            print(f"    False paths:          {fp_count}")
+            for fp in design_context.false_paths:
+                print(f"      • {fp.from_signal} → {fp.to_signal}")
+            print(f"    Clock groups:         {cg_count}")
+            for cg in design_context.clock_groups:
+                groups_str = " | ".join([", ".join(g) for g in cg.groups])
+                print(f"      • [{cg.group_type}] {groups_str}")
+            print(f"    DRC waivers:          {waiver_count}")
+            for rule_id, wlist in design_context.drc_waivers.items():
+                for w in wlist:
+                    print(f"      • {w.rule_id} [{w.scope}] {w.target}: {w.reason}")
+            print(f"    Block definitions:    {blk_count}")
+            for bname, bdef in design_context.blocks.items():
+                print(f"      • {bname} ({bdef.block_type}, domain: {bdef.power_domain or '—'})")
+            print(f"    Register maps:        {reg_count}")
+            for rname, rmap in design_context.register_maps.items():
+                print(f"      • {rname} @ {rmap.base_address} ({len(rmap.registers)} regs)")
+            print(f"    Synthesis directives: {dir_count}")
+            for sd in design_context.synthesis_directives:
+                print(f"      • {sd.directive_type}: {sd.target} = {sd.value}")
+
+        except Exception as e:
+            print(f"  ❌ Design context build failed: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print("\n  ⚠ Design context modules not available — running without constraint context")
+
     all_results = {}
 
-    # Run on each category
+    # Run on each category (pass design_context to analyzers)
     for category in ["buggy", "mixed", "good"]:
         cat_dir = sample_dir / category
         if cat_dir.exists():
-            all_results[category] = run_all_analyzers(str(cat_dir), f"sample_rtl/{category}")
+            all_results[category] = run_all_analyzers(
+                str(cat_dir), f"sample_rtl/{category}", design_context=design_context
+            )
 
     # ── Summary Table ─────────────────────────────────────────────────────
     print("\n\n" + "=" * 72)
@@ -288,6 +376,7 @@ def main():
     report = {
         "test_run": datetime.now().isoformat(),
         "sample_dir": str(sample_dir),
+        "design_context": design_context.to_dict() if design_context else None,
         "results": all_results,
     }
     report_path = out_dir / "e2e_test_results.json"

@@ -304,7 +304,7 @@ def run_analysis_background(
                 mode="analysis",
                 codebase_path=codebase_path,
                 llm_model=config.get("llm_model", ""),
-                use_ccls=config.get("use_ccls", False),
+                use_verible=config.get("use_verible", False),
                 use_hitl=bool(config.get("enable_hitl", False)),
                 metadata={"analysis_mode": analysis_mode},
             )
@@ -376,7 +376,7 @@ def run_analysis_background(
                 exclude_dirs=config.get("exclude_dirs", []),
                 exclude_globs=config.get("exclude_globs", []),
                 max_files=config.get("max_files", 2000),
-                use_ccls=config.get("use_ccls", False),
+                use_verible=config.get("use_verible", False),
                 file_to_fix=config.get("file_to_fix"),
                 hitl_context=hitl_context,
                 custom_constraints=config.get("custom_constraints", []),
@@ -385,6 +385,33 @@ def run_analysis_background(
             )
 
             phase_statuses[1] = "completed"
+
+            # Phase 1B: Build design context from constraint files
+            try:
+                from agents.context.design_context_builder import DesignContextBuilder
+                dc_config = global_config._data.get("design_context", {}) if global_config else {}
+                if dc_config.get("enable", True):
+                    dc_builder = DesignContextBuilder(
+                        codebase_path=codebase_path,
+                        config=dc_config,
+                    )
+                    design_context = dc_builder.build_context()
+                    # Inject into the LLM agent
+                    agent.design_context = design_context
+                    clk_count = len(design_context.clocks)
+                    waiver_count = sum(len(v) for v in design_context.drc_waivers.values())
+                    disc_count = sum(len(v) for v in design_context.discovered_files.values() if v)
+                    if disc_count > 0:
+                        _push_log(
+                            log_queue,
+                            f"Design context: {disc_count} constraint files parsed — "
+                            f"{clk_count} clocks, {waiver_count} waivers"
+                        )
+                    result_store["design_context"] = design_context.to_dict()
+            except ImportError:
+                pass
+            except Exception as e:
+                _push_log(log_queue, f"Design context build skipped: {e}", level="WARNING")
 
             # Phase 2-4: LLM Analysis (bulk of the work)
             phase_statuses[2] = "in_progress"

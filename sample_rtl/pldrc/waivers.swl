@@ -1,0 +1,14 @@
+# =============================================================================
+# CARE Sample SWL — DRC Waivers for sample_rtl
+# =============================================================================
+# Format: rule_id | scope | target | reason
+# =============================================================================
+
+# Waive combinational loop false positive on ALU feedback path
+HDL-DRC-001 | module | alu | ALU carry-chain is combinational by design
+
+# Waive latch inference in state decoder (intentional level-sensitive latch)
+HDL-DRC-002 | module | latch_inferred | Intentional transparent latch for async decode
+
+# Waive incomplete sensitivity list in legacy Verilog-95 code
+HDL-DRC-003 | global | * | Legacy code uses explicit sensitivity lists (Verilog-95 style)

@@ -35,17 +35,19 @@ class SynthesisSafetyAnalyzer:
         self.project_root = project_root or os.getcwd()
         self._file_cache: List[Dict[str, Any]] = []
 
-    def analyze(self, file_cache: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def analyze(self, file_cache: List[Dict[str, Any]], **kwargs) -> Dict[str, Any]:
         """
         Analyze Verilog/SystemVerilog for synthesis safety violations.
 
         Args:
             file_cache: List of processed Verilog file entries
+            **kwargs: Optional design_context (DesignContext) with DRC waivers from .swl files
 
         Returns:
             Synthesis safety analysis results with score, grade, metrics, issues
         """
         self._file_cache = file_cache or []
+        self._design_context = kwargs.get("design_context")
         return self._calculate_safety_score()
 
     def _calculate_safety_score(self) -> Dict[str, Any]:
@@ -428,6 +430,50 @@ class SynthesisSafetyAnalyzer:
             f"{total_violations} total violations"
         )
 
+        # Apply DRC waivers from design context (.swl files)
+        waivers_applied = 0
+        waived_violations: List[Dict[str, Any]] = []
+        if hasattr(self, "_design_context") and self._design_context:
+            dc = self._design_context
+            if hasattr(dc, "get_waivers_for_rule"):
+                drc_waivers = dc.get_waivers_for_rule("HDL-DRC")
+                if drc_waivers:
+                    waiver_lookup = {}
+                    for w in drc_waivers:
+                        waiver_lookup.setdefault(w.rule_id, []).append(w)
+
+                    for rel, hits in list(violations_by_file.items()):
+                        remaining = []
+                        for h in hits:
+                            rule_id = h.get("rule", "")
+                            if rule_id in waiver_lookup:
+                                # Check if waiver scope matches
+                                waiver_match = False
+                                for wv in waiver_lookup[rule_id]:
+                                    if wv.scope == "global" or wv.target in rel:
+                                        waiver_match = True
+                                        break
+                                if waiver_match:
+                                    h["waived"] = True
+                                    h["waiver_reason"] = wv.reason if wv else ""
+                                    waived_violations.append(h)
+                                    waivers_applied += 1
+                                    # Decrement rule count
+                                    if rule_id in rule_counts:
+                                        rule_counts[rule_id] = max(0, rule_counts[rule_id] - 1)
+                                    sev = h.get("severity", "low")
+                                    if sev in severity_breakdown:
+                                        severity_breakdown[sev] = max(0, severity_breakdown[sev] - 1)
+                                    continue
+                            remaining.append(h)
+                        violations_by_file[rel] = remaining
+
+                    total_violations = sum(rule_counts.values())
+                    if waivers_applied > 0:
+                        print(
+                            f"DEBUG synthesis_safety: {waivers_applied} violations waived by .swl DRC waivers"
+                        )
+
         # Compute risk score
         risk_points = 0
         critical_present = False
@@ -512,6 +558,8 @@ class SynthesisSafetyAnalyzer:
             "clean_files": clean_files,
             "files_with_critical": files_with_critical,
             "files_with_high": files_with_high,
+            "waivers_applied": waivers_applied,
+            "waived_violations": waived_violations,
         }
 
         return {

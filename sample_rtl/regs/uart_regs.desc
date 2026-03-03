@@ -1,0 +1,15 @@
+# =============================================================================
+# CARE Sample DESC — Register Map for uart_tx module
+# =============================================================================
+
+# module: uart_tx
+# base_address: 0x40001000
+# description: UART transmitter control and status registers
+
+# address | name       | width | reset    | access | description
+0x00 | TX_DATA   | 8  | 0x00 | WO | Transmit data register: [7:0]=data
+0x04 | TX_STATUS | 8  | 0x00 | RO | Status: [0]=busy, [1]=done, [2]=overrun
+0x08 | TX_CTRL   | 8  | 0x01 | RW | Control: [0]=enable, [3:1]=parity_mode, [7:4]=stop_bits
+0x0C | BAUD_DIV  | 16 | 0x001A | RW | Baud rate divisor: [15:0]=divider (default 115200 @ 50MHz)
+0x10 | TX_FIFO   | 8  | 0x00 | WO | FIFO write port: [7:0]=data_byte
+0x14 | FIFO_STAT | 8  | 0x00 | RO | FIFO status: [3:0]=level, [4]=full, [5]=empty

@@ -126,6 +126,17 @@ except ImportError:
     HITLContext = None
     HITL_AVAILABLE = False
 
+# Design context support (constraint files)
+try:
+    from agents.context.design_context import DesignContext
+    from agents.context.design_context_builder import DesignContextBuilder
+    DESIGN_CONTEXT_AVAILABLE = True
+except ImportError:
+    DESIGN_CONTEXT_AVAILABLE = False
+    DesignContext = None
+    DesignContextBuilder = None
+    logger.warning("DesignContextBuilder not available")
+
 
 # ============================================================================
 # STATIC ANALYZER AGENT
@@ -293,6 +304,7 @@ class StaticAnalyzerAgent:
         self.modularization_plan: Dict[str, Any] = {}
         self.validation_report: Dict[str, Any] = {}
         self.final_report: Dict[str, Any] = {}
+        self.design_context = None  # DesignContext from constraint files
         self.errors: List[Dict[str, Any]] = []
         self.report_files: Dict[str, str] = {}
         self.visualizations: Dict[str, str] = {}
@@ -376,6 +388,66 @@ class StaticAnalyzerAgent:
                 "error": error_msg
             })
             return []
+
+    # ========================================================================
+    # PHASE 1B: DESIGN CONTEXT (CONSTRAINT FILES)
+    # ========================================================================
+
+    def _build_design_context(self) -> None:
+        """
+        Discover and parse design constraint files (.sdc, .tcl, .swl, .blk, .vblk, .desc).
+        Builds a unified DesignContext that enriches analyzer and LLM agent accuracy.
+        """
+        if not DESIGN_CONTEXT_AVAILABLE:
+            logger.info("DesignContextBuilder not available — skipping constraint file parsing")
+            return
+
+        try:
+            if self.verbose and self.console:
+                self.console.print(
+                    "[bold cyan]Phase 1B: Building design context from constraint files...[/bold cyan]"
+                )
+
+            # Get config section if available
+            dc_config = {}
+            if self.config:
+                try:
+                    dc_config = self.config.get("design_context", {})
+                except Exception:
+                    pass
+
+            # Check if design context is enabled (default: True)
+            if not dc_config.get("enable", True):
+                logger.info("Design context disabled in config")
+                return
+
+            builder = DesignContextBuilder(
+                codebase_path=str(self.codebase_path),
+                config=dc_config,
+            )
+            self.design_context = builder.build_context()
+
+            summary = self.design_context.summary()
+            total = summary.get("constraint_files", 0)
+
+            if self.verbose and self.console:
+                self.console.print(
+                    f"  [green]Parsed {total} constraint files: "
+                    f"{summary.get('clocks', 0)} clocks, "
+                    f"{summary.get('timing_constraints', 0)} timing constraints, "
+                    f"{summary.get('false_paths', 0)} false paths, "
+                    f"{summary.get('drc_waivers', 0)} DRC waivers, "
+                    f"{summary.get('blocks', 0)} blocks, "
+                    f"{summary.get('register_maps', 0)} register maps, "
+                    f"{summary.get('synthesis_directives', 0)} synthesis directives[/green]"
+                )
+
+        except Exception as e:
+            logger.error(f"Design context building failed: {e}")
+            self.errors.append({
+                "stage": "design_context",
+                "error": str(e),
+            })
 
     # ========================================================================
     # PHASE 2: BATCH ANALYSIS WITH MEMORY MANAGEMENT
@@ -517,7 +589,8 @@ class StaticAnalyzerAgent:
                 self.console.print("[bold cyan]Phase 4: Calculating health metrics...[/bold cyan]")
 
             self.health_metrics = self.metrics_calculator.calculate_all_metrics(
-                self.file_cache, self.dependency_graph
+                self.file_cache, self.dependency_graph,
+                design_context=self.design_context,
             )
 
             # ── HITL: filter adapter results based on human feedback ─
@@ -1064,6 +1137,9 @@ class StaticAnalyzerAgent:
                     "message": "No files discovered",
                 }
 
+            # Phase 1B: Design Context (constraint files)
+            self._build_design_context()
+
             # Phase 2: Batch Analysis
             self._analyze_in_batches()
 
@@ -1089,6 +1165,7 @@ class StaticAnalyzerAgent:
                     "analysis_timestamp": datetime.utcnow().isoformat(),
                 },
                 "dependency_graph": self.dependency_graph,
+                "design_context": self.design_context.to_dict() if self.design_context else {},
                 "documentation": self.documentation,
                 "modularization_plan": self.modularization_plan,
                 "validation_report": self.validation_report,

@@ -482,7 +482,7 @@ def page_analyze():
         col1, col2 = st.columns(2)
         with col1:
             enable_adapters = st.checkbox(
-                "Enable Deep Adapters (Lizard, Flawfinder)",
+                "Enable Deep Adapters (Verilator, Verible)",
                 value=False,
             )
             st.session_state["enable_adapters"] = enable_adapters
@@ -1002,7 +1002,7 @@ def page_review():
                 "</div>",
                 unsafe_allow_html=True,
             )
-            st.caption("Results from deep static analysis adapters (Lizard, Flawfinder, CCLS).")
+            st.caption("Results from deep static analysis adapters (Verilator, Verible).")
 
             for adapter_name, adapter_df in adapter_sheets.items():
                 with st.expander(f"**{adapter_name}** — {len(adapter_df)} findings", expanded=False):
@@ -1038,7 +1038,7 @@ def page_review():
         st.download_button(
             "📥 Download Excel",
             data=excel_bytes,
-            file_name="cure_analysis_review.xlsx",
+            file_name="care_analysis_review.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     with col2:
@@ -1052,7 +1052,7 @@ def page_review():
         st.download_button(
             "📥 Download JSON",
             data=json_str,
-            file_name="cure_analysis_review.json",
+            file_name="care_analysis_review.json",
             mime="application/json",
         )
     with col3:
@@ -1375,7 +1375,7 @@ def page_fixer_qa():
                 st.download_button(
                     "📥 Download QA Report (Excel)",
                     data=trace_excel,
-                    file_name="cure_qa_traceability.xlsx",
+                    file_name="care_qa_traceability.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             with col2:
@@ -1383,7 +1383,7 @@ def page_fixer_qa():
                 st.download_button(
                     "📥 Download QA Report (JSON)",
                     data=trace_json,
-                    file_name="cure_qa_traceability.json",
+                    file_name="care_qa_traceability.json",
                     mime="application/json",
                 )
             with col3:
@@ -1391,14 +1391,14 @@ def page_fixer_qa():
                     codebase_path = st.session_state.get("codebase_path", "")
                     if codebase_path and os.path.isdir(codebase_path):
                         output_dir = st.session_state.get("output_dir", "./out")
-                        zip_base = os.path.join(output_dir, "cure_fixed_codebase")
+                        zip_base = os.path.join(output_dir, "care_fixed_codebase")
                         if st.button("📦 Create ZIP of Codebase"):
                             zip_path = create_zip_archive(codebase_path, zip_base)
                             with open(zip_path, "rb") as f:
                                 st.download_button(
                                     "📥 Download ZIP",
                                     data=f.read(),
-                                    file_name="cure_fixed_codebase.zip",
+                                    file_name="care_fixed_codebase.zip",
                                     mime="application/zip",
                                 )
         else:
@@ -2842,7 +2842,7 @@ def page_chat():
                 f"{speaker}: {_extract_content(text) if speaker != 'You' else text}"
                 for speaker, text in st.session_state["chat_history"]
             ),
-            file_name="cure_chat_history.txt",
+            file_name="care_chat_history.txt",
         )
 
 
@@ -2861,11 +2861,11 @@ def page_about():
             "## About CARE\n\n"
             "**CARE** (Codebase Analysis & Repair Engine) is a multi-stage Verilog/SystemVerilog HDL codebase "
             "health analysis pipeline. It combines fast regex-based static analyzers with "
-            "deep static analysis adapters (Lizard, Flawfinder, CCLS/libclang) and "
+            "deep static analysis adapters (Verilator, Verible) and "
             "LLM-powered code review to produce actionable health metrics.\n\n"
             "**Key features:**\n\n"
-            "- 9 built-in health analyzers (complexity, security, memory, deadlocks, etc.)\n"
-            "- Deep static adapters: AST complexity, dead code detection, call graph analysis\n"
+            "- 9 built-in HDL analyzers (CDC, synthesis safety, signal integrity, complexity, etc.)\n"
+            "- Deep static adapters: AST complexity, dead code detection, module hierarchy analysis\n"
             "- Multi-provider LLM support (Anthropic, QGenie, Vertex AI, Azure OpenAI)\n"
             "- Human-in-the-loop agentic code repair\n"
             "- Vector DB ingestion for RAG-powered chat\n"
@@ -2898,9 +2898,9 @@ def page_about():
         ),
         (
             "What are deep static adapters?",
-            "Adapters powered by real analysis tools instead of regex. "
-            "Use `--enable-adapters` to activate Lizard (complexity), "
-            "Flawfinder (security), and CCLS/libclang (dead code, call graphs, function metrics).",
+            "Adapters powered by real HDL analysis tools instead of regex. "
+            "Use `--enable-deep-analysis` to activate Verilator (lint, complexity), "
+            "Verible (syntax, hierarchy), and regex fallback for dead code and module metrics.",
         ),
     ]
     for q, a in FAQS:

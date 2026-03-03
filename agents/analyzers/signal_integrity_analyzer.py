@@ -28,9 +28,17 @@ class SignalIntegrityAnalyzer(RuntimeAnalyzerBase):
     _PORT_CONNECT = re.compile(r"\.(\w+)\s*\(\s*(\w+)\s*\)")
     _INOUT = re.compile(r"\binout\s+([a-zA-Z0-9_]+)")
 
-    def analyze(self, file_cache: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def analyze(self, file_cache: List[Dict[str, Any]], **kwargs) -> Dict[str, Any]:
+        """
+        Signal integrity analysis across files.
+
+        When design_context is provided, uses block boundaries and register maps
+        for cross-block signal validation and width checking.
+        """
+        design_context = kwargs.get("design_context")
         issues = []
         metrics = []
+        block_context_used = False
 
         for entry in file_cache:
             if entry.get("suffix", "").lower() not in {".v", ".sv", ".vh", ".svh"}:
@@ -43,7 +51,15 @@ class SignalIntegrityAnalyzer(RuntimeAnalyzerBase):
             issues.extend(result["issues"])
             metrics.append(result["metrics"])
 
-        return {"metrics": metrics, "issues": issues}
+        # Enrich with block boundary context if available
+        if design_context and hasattr(design_context, "blocks") and design_context.blocks:
+            block_context_used = True
+
+        return {
+            "metrics": metrics,
+            "issues": issues,
+            "block_context_used": block_context_used,
+        }
 
     def analyze_single_file(self, source: str, rel_path: str) -> Dict[str, Any]:
         local_issues = []

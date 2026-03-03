@@ -1,0 +1,41 @@
+# =============================================================================
+# CARE Sample BLK — Block Hierarchy for sample_rtl
+# =============================================================================
+
+block top_soc {
+    type: hierarchical
+    children: cpu_core, uart_block, spi_block, memory_subsystem
+    power_domain: VDD_CORE
+}
+
+block cpu_core {
+    type: hierarchical
+    parent: top_soc
+    ports: clk, rst_n, data_in, data_out, irq
+    children: alu, counter_gray
+    power_domain: VDD_CORE
+}
+
+block uart_block {
+    type: hierarchical
+    parent: top_soc
+    ports: clk, rst_n, rx_data, tx_out, baud_clk
+    children: uart_tx
+    power_domain: VDD_IO
+}
+
+block spi_block {
+    type: hierarchical
+    parent: top_soc
+    ports: clk, rst_n, sclk, mosi, miso, cs_n
+    children: spi_master
+    power_domain: VDD_IO
+}
+
+block memory_subsystem {
+    type: power_domain
+    parent: top_soc
+    ports: clk, rst_n, addr, wdata, rdata, wen, ren
+    children: memory_ctrl, fifo_sync
+    power_domain: VDD_MEM
+}
