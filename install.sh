@@ -166,7 +166,11 @@ find_python() {
             local major minor
             major="${ver%%.*}"
             minor="${ver#*.}"
-            if [[ "$major" -ge "$MIN_PYTHON_MAJOR" && "$minor" -ge "$MIN_PYTHON_MINOR" ]]; then
+            # Compare as combined integer to avoid 4.0 > 3.9 failing
+            local have_ver want_ver
+            have_ver=$(( major * 100 + minor ))
+            want_ver=$(( MIN_PYTHON_MAJOR * 100 + MIN_PYTHON_MINOR ))
+            if [[ "$have_ver" -ge "$want_ver" ]]; then
                 echo "$py"
                 return
             fi
@@ -183,12 +187,23 @@ if [[ -z "$PYTHON_BIN" ]]; then
         brew)   brew install python@3.12 2>/dev/null || true ;;
         apt)
             sudo apt-get update -qq
-            sudo apt-get install -y -qq python3.12 python3.12-venv python3-pip 2>/dev/null || \
-            sudo apt-get install -y -qq python3 python3-venv python3-pip 2>/dev/null || true
+            # Try python3.12 first (Ubuntu 24.04+ / deadsnakes), fall back to default python3
+            if ! sudo apt-get install -y -qq python3.12 python3.12-venv python3-pip 2>/dev/null; then
+                # On older Ubuntu/Debian, try adding deadsnakes PPA
+                if has_cmd add-apt-repository; then
+                    substep "Adding deadsnakes PPA for Python 3.12..."
+                    sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
+                    sudo apt-get update -qq
+                    sudo apt-get install -y -qq python3.12 python3.12-venv python3-pip 2>/dev/null || true
+                fi
+                # Final fallback: system python3
+                sudo apt-get install -y -qq python3 python3-venv python3-pip 2>/dev/null || true
+            fi
             ;;
-        dnf)    sudo dnf install -y python3.12 python3-pip 2>/dev/null || \
-                sudo dnf install -y python3 python3-pip 2>/dev/null || true ;;
-        pacman) sudo pacman -S --noconfirm python python-pip 2>/dev/null || true ;;
+        dnf)    sudo dnf install -y python3.12 python3-pip python3-virtualenv 2>/dev/null || \
+                sudo dnf install -y python3 python3-pip python3-virtualenv 2>/dev/null || true ;;
+        yum)    sudo yum install -y python3 python3-pip python3-virtualenv 2>/dev/null || true ;;
+        pacman) sudo pacman -S --noconfirm python python-pip python-virtualenv 2>/dev/null || true ;;
         *)      err "Please install Python ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+ manually."; exit 1 ;;
     esac
     PYTHON_BIN="$(find_python)"
@@ -279,6 +294,25 @@ if [[ "${CARE_SKIP_HDL:-0}" != "1" ]]; then
                     fi
                 fi
                 ;;
+            dnf|yum|pacman)
+                # Verible not in standard repos — install from GitHub release
+                substep "Fetching Verible from GitHub releases..."
+                VERIBLE_VER="v0.0-3824-g74aafdb6"
+                ARCH="$(uname -m)"
+                case "$ARCH" in
+                    x86_64|amd64) VERIBLE_ARCH="x86_64" ;;
+                    aarch64|arm64) VERIBLE_ARCH="aarch64" ;;
+                    *) warn "Unsupported arch for Verible: $ARCH"; VERIBLE_ARCH="" ;;
+                esac
+                if [[ -n "$VERIBLE_ARCH" ]]; then
+                    VERIBLE_URL="https://github.com/chipsalliance/verible/releases/download/${VERIBLE_VER}/verible-${VERIBLE_VER}-linux-static-${VERIBLE_ARCH}.tar.gz"
+                    curl -fsSL "$VERIBLE_URL" -o /tmp/verible.tar.gz 2>/dev/null && \
+                    sudo tar -xzf /tmp/verible.tar.gz -C /usr/local --strip-components=1 2>/dev/null && \
+                    rm -f /tmp/verible.tar.gz && \
+                    info "Verible installed from GitHub" || \
+                    warn "Failed to install Verible. Install manually from: https://github.com/chipsalliance/verible/releases"
+                fi
+                ;;
             *) warn "Please install Verible manually: https://github.com/chipsalliance/verible/releases" ;;
         esac
     fi
@@ -287,6 +321,11 @@ if [[ "${CARE_SKIP_HDL:-0}" != "1" ]]; then
     if has_cmd verilator; then
         info "Verilator already installed: $(verilator --version 2>&1 | head -1)"
     else
+        # On RHEL/CentOS, Verilator requires EPEL repo
+        if [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
+            substep "Enabling EPEL repository (needed for Verilator)..."
+            sudo $PKG_MANAGER install -y epel-release 2>/dev/null || true
+        fi
         pkg_install "Verilator" "verilator" "verilator"
     fi
 

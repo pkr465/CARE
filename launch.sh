@@ -60,22 +60,29 @@ done
 
 # ── Banner ──────────────────────────────────────────────────────────────────
 echo -e "${CYAN}${BOLD}"
-echo "  ╔═══════════════════════════════════════════╗"
-echo "  ║   CARE — Codebase Analysis & Repair Engine ║"
-echo "  ║   Silicon Design HDL Framework             ║"
-echo "  ╚═══════════════════════════════════════════╝"
+echo "  ╔══════════════════════════════════════════════╗"
+echo "  ║  CARE — Codebase Analysis & Repair Engine  ║"
+echo "  ║  Silicon Design HDL Framework              ║"
+echo "  ╚══════════════════════════════════════════════╝"
 echo -e "${NC}"
 
 # ── Activate virtual environment ────────────────────────────────────────────
-if [[ -d "$VENV_DIR" ]]; then
-    source "${VENV_DIR}/bin/activate"
-    echo -e "${GREEN}[✓]${NC} Virtual environment activated"
-elif [[ -f "${VENV_DIR}/bin/activate" ]]; then
+if [[ -f "${VENV_DIR}/bin/activate" ]]; then
     source "${VENV_DIR}/bin/activate"
     echo -e "${GREEN}[✓]${NC} Virtual environment activated"
 else
-    echo -e "${YELLOW}[!]${NC} No virtual environment found. Using system Python."
+    echo -e "${YELLOW}[!]${NC} No virtual environment found at ${VENV_DIR}. Using system Python."
     echo -e "    Run ${CYAN}./install.sh${NC} first for a clean setup."
+fi
+
+# ── Load .env file (if present) ────────────────────────────────────────────
+if [[ -f ".env" ]]; then
+    # Export all non-comment, non-empty lines as environment variables
+    set -a
+    # shellcheck disable=SC1091
+    source <(grep -vE '^\s*(#|$)' .env | sed 's/\r$//')
+    set +a
+    echo -e "${GREEN}[✓]${NC} Loaded environment from .env"
 fi
 
 # ── Check Streamlit ─────────────────────────────────────────────────────────
@@ -125,7 +132,14 @@ echo -e "    Press ${BOLD}Ctrl+C${NC} to stop"
 echo ""
 
 export STREAMLIT_PORT="$PORT"
+
+# Honor CARE_NO_BROWSER — headless=true suppresses auto-open
+HEADLESS="false"
+if [[ "${CARE_NO_BROWSER:-0}" == "1" ]]; then
+    HEADLESS="true"
+fi
+
 exec python -m streamlit run "$APP_PATH" \
     --server.port "$PORT" \
-    --server.headless true \
+    --server.headless "$HEADLESS" \
     --browser.gatherUsageStats false
