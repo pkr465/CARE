@@ -280,11 +280,11 @@ class CodebasePatchAgent:
                         ctx = self.config.get("context", {}) if hasattr(self.config, 'get') else {}
                         if isinstance(ctx, dict):
                             hdr_cfg = {
-                                "include_paths": ctx.get("include_paths") or [],
-                                "max_header_depth": int(ctx.get("max_header_depth", 2)),
+                                "include_paths": ctx.get("hdl_include_paths") or [],
+                                "max_header_depth": int(ctx.get("max_include_depth", 2)),
                                 "max_context_chars": int(ctx.get("max_context_chars", 6000)),
-                                "exclude_system_headers": ctx.get("exclude_system_headers", True),  # excluded system packages/includes
-                                "exclude_headers": ctx.get("exclude_headers", []),
+                                "exclude_system_headers": ctx.get("exclude_system_packages", True),
+                                "exclude_headers": ctx.get("exclude_includes", []),
                             }
                     except Exception:
                         pass

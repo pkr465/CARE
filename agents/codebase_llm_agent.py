@@ -199,19 +199,20 @@ class CodebaseLLMAgent:
         # --- Header Context Builder (context-aware analysis) ---
         self.header_context_builder = None
         context_cfg = self.config.get("context", {}) if self.config else {}
-        if isinstance(context_cfg, dict) and context_cfg.get("enable_header_context", True):
+        if isinstance(context_cfg, dict) and context_cfg.get("enable_include_context", True):
             if HEADER_CONTEXT_AVAILABLE:
                 try:
-                    inc_paths = context_cfg.get("include_paths", [])
+                    # Config keys match global_config.yaml context section
+                    inc_paths = context_cfg.get("hdl_include_paths", [])
                     self.header_context_builder = HeaderContextBuilder(
                         codebase_path=str(self.codebase_path),
                         include_paths=inc_paths if isinstance(inc_paths, list) else [],
-                        max_header_depth=int(context_cfg.get("max_header_depth", 2)),
+                        max_header_depth=int(context_cfg.get("max_include_depth", 2)),
                         max_context_chars=int(context_cfg.get("max_context_chars", 6000)),
-                        exclude_system_headers=context_cfg.get("exclude_system_headers", True),
+                        exclude_system_headers=context_cfg.get("exclude_system_packages", True),
                         exclude_dirs=list(self.exclude_dirs),
                         exclude_globs=self.exclude_globs,
-                        exclude_headers=context_cfg.get("exclude_headers", []),
+                        exclude_headers=context_cfg.get("exclude_includes", []),
                     )
                     logger.info(
                         f"[*] Header Context Builder ENABLED "

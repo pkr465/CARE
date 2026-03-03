@@ -337,6 +337,35 @@ class HDLContextBuilder:
             if not ip.is_absolute():
                 ip = self.codebase_path / ip
             self.include_paths.append(ip.resolve())
+
+        # Auto-discover include directories when none provided.
+        # Walks the codebase tree looking for directories that contain
+        # header files (.svh, .vh) and adds them as implicit include paths.
+        _walk_exclude = self._DEFAULT_WALK_EXCLUDE | set(exclude_dirs or [])
+        if not self.include_paths and self.codebase_path.is_dir():
+            _header_exts = {".svh", ".vh"}
+            discovered: List[Path] = []
+            try:
+                for root, dirs, files in os.walk(self.codebase_path):
+                    dirs[:] = [d for d in dirs if d not in _walk_exclude]
+                    has_headers = any(
+                        Path(f).suffix.lower() in _header_exts for f in files
+                    )
+                    if has_headers:
+                        rp = Path(root).resolve()
+                        if rp != self.codebase_path:
+                            discovered.append(rp)
+                self.include_paths = discovered
+                if discovered:
+                    logger.info(
+                        f"  Auto-discovered {len(discovered)} include "
+                        f"directories from codebase tree"
+                    )
+                    for dp in discovered[:10]:
+                        logger.debug(f"    > {dp}")
+            except Exception as walk_err:
+                logger.debug(f"  Include path auto-discovery failed: {walk_err}")
+
         self.max_header_depth = max_header_depth
         self.max_context_chars = max_context_chars
         self.exclude_system_headers = exclude_system_headers
