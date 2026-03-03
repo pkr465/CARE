@@ -228,8 +228,11 @@ class QGenieProvider(BaseLLMProvider):
                     "Install it with: pip install qgenie"
                 )
             
+            # Pass the full raw_model string (e.g. "azure::gpt-5.2") so QGenie SDK
+            # can route to the correct backend. Do NOT use self.config.model which
+            # strips the provider prefix.
             init_kwargs = {
-                "model": self.config.model,
+                "model": self.config.raw_model,
                 "timeout": self.config.timeout,
             }
 
@@ -278,7 +281,7 @@ class QGenieProvider(BaseLLMProvider):
             prompt_chars = sum(len(m.content) for m in lc_messages)
             logger.info(
                 "QGenie API call: model=%s prompt_chars=%d max_tokens=%d timeout=%ds",
-                self.config.model, prompt_chars, _tok, self.config.timeout,
+                self.config.raw_model, prompt_chars, _tok, self.config.timeout,
             )
 
             start = time.monotonic()
@@ -296,7 +299,7 @@ class QGenieProvider(BaseLLMProvider):
             resp_chars = len(result.content) if result.content else 0
             logger.info(
                 "QGenie API done: model=%s elapsed=%.1fs response_chars=%d",
-                self.config.model, elapsed, resp_chars,
+                self.config.raw_model, elapsed, resp_chars,
             )
             return result.content
 

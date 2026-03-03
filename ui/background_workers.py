@@ -461,7 +461,7 @@ def run_analysis_background(
                             "file_name": os.path.basename(str(fpath)),
                             "source": source,
                         })
-                    adapter_results = mc._run_adapters(file_cache, {})
+                    adapter_results = mc._run_hdl_adapters(file_cache, {})
                     # Log per-adapter results for diagnostics
                     for aname, ares in adapter_results.items():
                         avail = ares.get("tool_available", False)
