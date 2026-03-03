@@ -614,7 +614,7 @@ def run_analysis_background(
                 issues_medium=sev_counts.get("MEDIUM", 0),
                 issues_low=sev_counts.get("LOW", 0),
                 duration_seconds=duration,
-                metadata={"use_ccls": config.get("use_ccls", False)},
+                metadata={"use_verible": config.get("use_verible", False)},
             )
 
     except Exception as e:

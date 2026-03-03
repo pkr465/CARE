@@ -263,7 +263,7 @@ class PostgresDbSetup:
                     total_prompt_tokens  INTEGER    DEFAULT 0,
                     total_completion_tokens INTEGER DEFAULT 0,
                     total_llm_latency_ms INTEGER   DEFAULT 0,
-                    use_ccls            BOOLEAN     DEFAULT FALSE,
+                    use_verible            BOOLEAN     DEFAULT FALSE,
                     use_hitl            BOOLEAN     DEFAULT FALSE,
                     constraints_used    TEXT,
                     duration_seconds    REAL,

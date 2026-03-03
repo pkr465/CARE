@@ -137,7 +137,7 @@ class TelemetryService:
                         total_prompt_tokens  INTEGER    DEFAULT 0,
                         total_completion_tokens INTEGER DEFAULT 0,
                         total_llm_latency_ms INTEGER   DEFAULT 0,
-                        use_ccls            BOOLEAN     DEFAULT FALSE,
+                        use_verible            BOOLEAN     DEFAULT FALSE,
                         use_hitl            BOOLEAN     DEFAULT FALSE,
                         constraints_used    TEXT,
                         duration_seconds    REAL,
@@ -287,7 +287,7 @@ class TelemetryService:
         codebase_path: Optional[str] = None,
         llm_provider: Optional[str] = None,
         llm_model: Optional[str] = None,
-        use_ccls: bool = False,
+        use_verible: bool = False,
         use_hitl: bool = False,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
@@ -302,10 +302,10 @@ class TelemetryService:
                     text("""
                         INSERT INTO telemetry_runs
                             (run_id, mode, status, codebase_path,
-                             llm_provider, llm_model, use_ccls, use_hitl, metadata)
+                             llm_provider, llm_model, use_verible, use_hitl, metadata)
                         VALUES
                             (:run_id, :mode, 'started', :codebase_path,
-                             :llm_provider, :llm_model, :use_ccls, :use_hitl,
+                             :llm_provider, :llm_model, :use_verible, :use_hitl,
                              :metadata::jsonb)
                     """),
                     {
@@ -314,7 +314,7 @@ class TelemetryService:
                         "codebase_path": codebase_path,
                         "llm_provider": llm_provider,
                         "llm_model": llm_model,
-                        "use_ccls": use_ccls,
+                        "use_verible": use_verible,
                         "use_hitl": use_hitl,
                         "metadata": _to_json(metadata),
                     },

@@ -106,7 +106,7 @@ class CodebaseLLMAgent:
         exclude_dirs: Optional[List[str]] = None,
         exclude_globs: Optional[List[str]] = None,
         max_files: int = 10000,
-        use_ccls: bool = False,
+        use_verible: bool = False,
         file_to_fix: Optional[str] = None,
         config: Optional[GlobalConfig] = None,
         llm_tools: Optional[LLMTools] = None,
@@ -125,7 +125,7 @@ class CodebaseLLMAgent:
         :param exclude_dirs: Directories to exclude from scanning.
         :param exclude_globs: Glob patterns to exclude (relative paths, fnmatch syntax).
         :param max_files: Maximum number of files to analyze.
-        :param use_ccls: Boolean to enable/disable CCLS dependency analysis.
+        :param use_verible: Boolean to enable/disable CCLS dependency analysis.
         :param file_to_fix: Specific relative path to a file to analyze (ignores others).
         :param config: Optional GlobalConfig for configuration management.
         :param llm_tools: Optional pre-configured LLMTools (for multi-agent sharing).
@@ -152,7 +152,7 @@ class CodebaseLLMAgent:
         self.max_files = max_files
         self.run_id = str(uuid.uuid4())
         self.start_time = datetime.now()
-        self.use_ccls = use_ccls
+        self.use_verible = use_verible
         self.file_to_fix = file_to_fix
 
         # Telemetry (optional — fire-and-forget)
@@ -193,7 +193,7 @@ class CodebaseLLMAgent:
         self.errors: List[Dict] = []
 
         # --- Initialize Services based on Flag AND Availability ---
-        if self.use_ccls:
+        if self.use_verible:
             if DEPENDENCY_SERVICES_AVAILABLE:
                 logger.info("[*] CCLS Dependency Services ENABLED.")
                 dep_cfg = dep_config or (
@@ -250,7 +250,7 @@ class CodebaseLLMAgent:
             try:
                 self.context_validator = ContextValidator(
                     codebase_path=str(self.codebase_path),
-                    use_ccls=self.use_ccls and self.is_indexed,
+                    use_verible=self.use_verible and self.is_indexed,
                     ccls_navigator=None,  # Will be updated after CCLS indexing
                 )
                 logger.info("[*] Context Validator ENABLED (heuristic mode)")
@@ -267,7 +267,7 @@ class CodebaseLLMAgent:
                     exclude_dirs=list(self.exclude_dirs),
                     exclude_globs=self.exclude_globs,
                     header_context_builder=self.header_context_builder,
-                    use_ccls=self.use_ccls,
+                    use_verible=self.use_verible,
                     ccls_navigator=None,  # Updated after CCLS indexing
                     max_trace_depth=3,
                     max_context_chars=1200,
@@ -476,7 +476,7 @@ class CodebaseLLMAgent:
             logger.info(f"[*] Targeted Mode: Analyzing specific file '{self.file_to_fix}'")
 
         # --- 1. Ingestion Step ---
-        if self.use_ccls and self.ingestion:
+        if self.use_verible and self.ingestion:
             logger.info(f"[*] Triggering CCLS Ingestion for '{self.project_name}'...")
             try:
                 self.is_indexed = self.ingestion.run_indexing(
@@ -499,7 +499,7 @@ class CodebaseLLMAgent:
             except Exception as e:
                 logger.error(f"[!] Critical Error during CCLS Ingestion: {e}")
                 self.is_indexed = False
-        elif self.use_ccls and not self.ingestion:
+        elif self.use_verible and not self.ingestion:
             logger.warning(
                 "[!] CCLS requested but ingestion service is None "
                 "(dependency_builder not installed?). No CCLS context will be available."
@@ -554,7 +554,7 @@ class CodebaseLLMAgent:
             logger.info("[*] Skipping email report: No recipients configured.")
 
         # --- 6. CCLS Artifact Cleanup ---
-        if self.use_ccls:
+        if self.use_verible:
             try:
                 from dependency_builder.cleanup import cleanup_ccls_artifacts
                 logger.info("[*] Cleaning up CCLS artifacts...")
@@ -629,11 +629,11 @@ class CodebaseLLMAgent:
                 # 2. Context Retrieval (Dependencies)
                 dependency_context = ""
                 # Only fetch dependencies if enabled, available, and indexed
-                if self.use_ccls and self.is_indexed and self.dep_service:
+                if self.use_verible and self.is_indexed and self.dep_service:
                     dependency_context = self._fetch_chunk_dependencies(
                         rel_path, start_line, end_line
                     )
-                elif self.use_ccls:
+                elif self.use_verible:
                     # Log why CCLS context was skipped despite being requested
                     logger.debug(
                         f"    CCLS skipped for {rel_path}: "
@@ -947,7 +947,7 @@ class CodebaseLLMAgent:
         try:
             logger.debug(
                 f"    CCLS fetch: {rel_path} lines {start_line}-{end_line} "
-                f"(use_ccls={self.use_ccls}, is_indexed={self.is_indexed}, "
+                f"(use_verible={self.use_verible}, is_indexed={self.is_indexed}, "
                 f"dep_service={'yes' if self.dep_service else 'None'})"
             )
 

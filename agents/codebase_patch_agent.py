@@ -319,7 +319,7 @@ class CodebasePatchAgent:
                     exclude_dirs=list(self.exclude_dirs),
                     exclude_globs=self.exclude_globs,
                     header_context_builder=self.header_context_builder,
-                    use_ccls=False,  # CCLS not applicable for HDL
+                    use_verible=False,  # CCLS not applicable for HDL
                     ccls_navigator=None,
                     max_trace_depth=3,
                     max_context_chars=1200,

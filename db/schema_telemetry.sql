@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS telemetry_runs (
     total_llm_latency_ms INTEGER   DEFAULT 0,
 
     -- Config flags
-    use_ccls            BOOLEAN     DEFAULT FALSE,
+    use_verible            BOOLEAN     DEFAULT FALSE,
     use_hitl            BOOLEAN     DEFAULT FALSE,
     constraints_used    TEXT,       -- comma-separated constraint filenames
 
