@@ -315,7 +315,7 @@ class HDLContextBuilder:
     # Default directory names to skip during recursive include search
     _DEFAULT_WALK_EXCLUDE = {
         ".git", "build", "dist", "sim", "synth", "synthesis", "synthesis_results",
-        "vendor", ".ccls-cache", "__pycache__", "bin", "obj", ".svn",
+        "vendor", "__pycache__", "bin", "obj", ".svn",
     }
 
     def __init__(

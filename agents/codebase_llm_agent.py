@@ -26,15 +26,6 @@ except ImportError:
     AnalyzerConfig = None
     DEPENDENCY_SERVICES_AVAILABLE = False
 
-# --- Optional CCLS / Dependency Builder Services ---
-try:
-    from agents.services.dependency_builder import (
-        DependencyBuilderConfig, CCLSIngestion, DependencyService
-    )
-except ImportError:
-    DependencyBuilderConfig = None
-    CCLSIngestion = None
-    DependencyService = None
 
 # Try importing the prompt
 try:
@@ -89,14 +80,13 @@ class CodebaseLLMAgent:
     """
     LLM-Enhanced Agent for strict HDL code review.
 
-    UPDATED ARCHITECTURE:
-    1. Ingestion Phase: Runs CCLS indexing to build a dependency graph (Optional via --use-ccls).
-    2. Semantic Chunking: Combines physical code blocks with dependency context.
-    3. Anchor Logic: Maps LLM findings back to exact source lines.
-    4. Constraint Injection: Loads 'Issue Identification Rules' from constraints files to guide LLM.
+    ARCHITECTURE:
+    1. Semantic Chunking: Combines physical code blocks with dependency context.
+    2. Anchor Logic: Maps LLM findings back to exact source lines.
+    3. Constraint Injection: Loads 'Issue Identification Rules' from constraints files to guide LLM.
 
-    MODERNIZED IMPLEMENTATION:
-    - Dependency injection for LLMTools, config, and DependencyBuilderConfig
+    IMPLEMENTATION:
+    - Dependency injection for LLMTools and config
     - Uses EmailReporter (not CodebaseEmailReporter)
     - Uses ExcelWriter (not xlsxwriter directly)
     - Proper logging instead of print statements
@@ -120,7 +110,6 @@ class CodebaseLLMAgent:
         file_to_fix: Optional[str] = None,
         config: Optional[GlobalConfig] = None,
         llm_tools: Optional[LLMTools] = None,
-        dep_config: Optional[DependencyBuilderConfig] = None,
         hitl_context: Optional['HITLContext'] = None,
         constraints_dir: str = "agents/constraints",
         custom_constraints: Optional[List[str]] = None,
@@ -131,15 +120,14 @@ class CodebaseLLMAgent:
         Initialize CodebaseLLMAgent with dependency injection support.
 
         :param codebase_path: Root of the HDL project.
-        :param output_dir: Directory for reports and CCLS cache.
+        :param output_dir: Directory for reports.
         :param exclude_dirs: Directories to exclude from scanning.
         :param exclude_globs: Glob patterns to exclude (relative paths, fnmatch syntax).
         :param max_files: Maximum number of files to analyze.
-        :param use_verible: Boolean to enable/disable CCLS dependency analysis.
+        :param use_verible: Boolean to enable/disable Verible dependency analysis.
         :param file_to_fix: Specific relative path to a file to analyze (ignores others).
         :param config: Optional GlobalConfig for configuration management.
         :param llm_tools: Optional pre-configured LLMTools (for multi-agent sharing).
-        :param dep_config: Optional DependencyBuilderConfig for dependency services.
         :param hitl_context: Optional HITLContext for human-in-the-loop feedback integration.
         :param constraints_dir: Path to the constraints directory (default: agents/constraints).
         :param custom_constraints: Additional custom constraint .md file paths to include.
@@ -182,7 +170,7 @@ class CodebaseLLMAgent:
 
         self.exclude_dirs = set(exclude_dirs or [
             ".git", "build", "dist", ".idea", ".vscode",
-            "node_modules", "third_party", "__pycache__", ".ccls-cache"
+            "node_modules", "third_party", "__pycache__"
         ])
         self.exclude_globs = exclude_globs or []
         self.custom_constraints = custom_constraints or []
@@ -202,26 +190,9 @@ class CodebaseLLMAgent:
         self.results: List[Dict] = []
         self.errors: List[Dict] = []
 
-        # --- Initialize Services based on Flag AND Availability ---
-        if self.use_verible:
-            if DEPENDENCY_SERVICES_AVAILABLE and CCLSIngestion is not None and DependencyService is not None:
-                logger.info("[*] CCLS Dependency Services ENABLED.")
-                dep_cfg = dep_config or (
-                    DependencyBuilderConfig.from_env() if DependencyBuilderConfig else None
-                )
-                self.ingestion = CCLSIngestion(config=dep_cfg) if dep_cfg else CCLSIngestion()
-                self.dep_service = DependencyService(config=dep_cfg) if dep_cfg else DependencyService()
-            else:
-                logger.warning(
-                    "[!] Warning: --use-ccls requested but dependency services are not installed. "
-                    "Reverting to heuristic mode."
-                )
-                self.ingestion = None
-                self.dep_service = None
-        else:
-            logger.info("[*] CCLS Dependency Services DISABLED (heuristic mode).")
-            self.ingestion = None
-            self.dep_service = None
+        # --- Dependency services (reserved for future Verible integration) ---
+        self.ingestion = None
+        self.dep_service = None
 
         self.is_indexed = False
         self.hitl_context = hitl_context
@@ -260,8 +231,7 @@ class CodebaseLLMAgent:
             try:
                 self.context_validator = ContextValidator(
                     codebase_path=str(self.codebase_path),
-                    use_verible=self.use_verible and self.is_indexed,
-                    ccls_navigator=None,  # Will be updated after CCLS indexing
+                    use_verible=self.use_verible,
                 )
                 logger.info("[*] Context Validator ENABLED (heuristic mode)")
             except Exception as cv_err:
@@ -278,7 +248,6 @@ class CodebaseLLMAgent:
                     exclude_globs=self.exclude_globs,
                     header_context_builder=self.header_context_builder,
                     use_verible=self.use_verible,
-                    ccls_navigator=None,  # Updated after CCLS indexing
                     max_trace_depth=3,
                     max_context_chars=1200,
                     cache_dir=_csa_cache_dir,
@@ -468,10 +437,9 @@ class CodebaseLLMAgent:
     ) -> str:
         """
         Main Execution Pipeline:
-        1. Ingestion (CCLS Indexing) - Only if enabled (Indexes full repo for context)
-        2. File Discovery (Handles single file target)
-        3. Semantic Analysis (File -> Chunk -> Fetch Context -> LLM)
-        4. Reporting (Excel + Email)
+        1. File Discovery (Handles single file target)
+        2. Semantic Analysis (File -> Chunk -> Fetch Context -> LLM)
+        3. Reporting (Excel + Email)
 
         :param output_filename: Name/path for the Excel report.
         :param email_recipients: List of email addresses to send report to.
@@ -485,37 +453,7 @@ class CodebaseLLMAgent:
         if self.file_to_fix:
             logger.info(f"[*] Targeted Mode: Analyzing specific file '{self.file_to_fix}'")
 
-        # --- 1. Ingestion Step ---
-        if self.use_verible and self.ingestion:
-            logger.info(f"[*] Triggering CCLS Ingestion for '{self.project_name}'...")
-            try:
-                self.is_indexed = self.ingestion.run_indexing(
-                    project_root=str(self.codebase_path),
-                    output_dir=self.output_dir,
-                    unique_project_prefix=self.project_name,
-                    exclude_dirs=list(self.exclude_dirs),
-                    exclude_globs=self.exclude_globs,
-                )
-                if self.is_indexed:
-                    logger.info(
-                        f"[*] CCLS Ingestion SUCCESS — cache at: "
-                        f"{os.path.join(os.path.abspath(self.output_dir), '.ccls-cache')}"
-                    )
-                else:
-                    logger.warning(
-                        "[!] Warning: Ingestion failed or timed out. "
-                        "Analysis will proceed without semantic context."
-                    )
-            except Exception as e:
-                logger.error(f"[!] Critical Error during CCLS Ingestion: {e}")
-                self.is_indexed = False
-        elif self.use_verible and not self.ingestion:
-            logger.warning(
-                "[!] CCLS requested but ingestion service is None "
-                "(dependency_builder not installed?). No CCLS context will be available."
-            )
-
-        # --- 2. Gather Files ---
+        # --- 1. Gather Files ---
         files = self._gather_files()
         file_count = len(files)
 
@@ -525,7 +463,7 @@ class CodebaseLLMAgent:
 
         logger.info(f"[*] Found {file_count} HDL files to analyze.")
 
-        # --- 3. Analysis Loop ---
+        # --- 2. Analysis Loop ---
         for i, file_path in enumerate(files):
             try:
                 rel_path = str(file_path.relative_to(self.codebase_path))
@@ -540,7 +478,7 @@ class CodebaseLLMAgent:
                 logger.error(f"    ! Error analyzing {rel_path}: {e}")
                 self.errors.append({"file": rel_path, "error": str(e)})
 
-        # --- 4. Report Generation ---
+        # --- 3. Report Generation ---
         json_path = os.path.join(self.output_dir, "llm_analysis_metrics.jsonl")
         self._generate_json_metrics(json_path)
 
@@ -554,7 +492,7 @@ class CodebaseLLMAgent:
 
         excel_path = self._generate_excel_report(full_out_path, adapter_results=adapter_results)
 
-        # --- 5. Email Notification ---
+        # --- 4. Email Notification ---
         if email_recipients is None and self.config:
             email_recipients = self.config.get("email.recipients")
 
@@ -562,23 +500,6 @@ class CodebaseLLMAgent:
             self._trigger_email_report(email_recipients, excel_path, file_count)
         else:
             logger.info("[*] Skipping email report: No recipients configured.")
-
-        # --- 6. CCLS Artifact Cleanup ---
-        if self.use_verible:
-            try:
-                from dependency_builder.cleanup import cleanup_ccls_artifacts
-                logger.info("[*] Cleaning up CCLS artifacts...")
-                cleanup_stats = cleanup_ccls_artifacts(
-                    output_dir=self.output_dir,
-                    project_root=str(self.codebase_path),
-                )
-                mb = cleanup_stats["bytes_freed"] / (1024 * 1024)
-                logger.info(
-                    f"[*] CCLS cleanup: {cleanup_stats['files_removed']} files, "
-                    f"{cleanup_stats['dirs_removed']} dirs removed ({mb:.1f} MB freed)"
-                )
-            except Exception as e:
-                logger.warning(f"[!] CCLS cleanup failed: {e}")
 
         return excel_path
 
@@ -636,20 +557,8 @@ class CodebaseLLMAgent:
 
                 numbered_code_block = "\n".join(numbered_lines)
 
-                # 2. Context Retrieval (Dependencies)
+                # 2. Context Retrieval (Dependencies) — placeholder for future Verible integration
                 dependency_context = ""
-                # Only fetch dependencies if enabled, available, and indexed
-                if self.use_verible and self.is_indexed and self.dep_service:
-                    dependency_context = self._fetch_chunk_dependencies(
-                        rel_path, start_line, end_line
-                    )
-                elif self.use_verible:
-                    # Log why CCLS context was skipped despite being requested
-                    logger.debug(
-                        f"    CCLS skipped for {rel_path}: "
-                        f"is_indexed={self.is_indexed}, "
-                        f"dep_service={'yes' if self.dep_service else 'None'}"
-                    )
 
                 # 2b. Header Context (struct/enum/macro definitions from included headers)
                 header_context = ""
@@ -948,62 +857,6 @@ class CodebaseLLMAgent:
 
         except Exception as e:
             raise e
-
-    def _fetch_chunk_dependencies(self, rel_path: str, start_line: int, end_line: int) -> str:
-        """
-        Uses DependencyService to fetch relevant definitions (structs, globals, macros)
-        used within the specified line range.
-        """
-        try:
-            logger.debug(
-                f"    CCLS fetch: {rel_path} lines {start_line}-{end_line} "
-                f"(use_verible={self.use_verible}, is_indexed={self.is_indexed}, "
-                f"dep_service={'yes' if self.dep_service else 'None'})"
-            )
-
-            # Use 'fetch_dependencies_by_file' to get context for the range
-            response = self.dep_service.perform_fetch(
-                project_root=str(self.codebase_path),
-                output_dir=self.output_dir,
-                codebase_identifier=self.project_name,
-                endpoint_type="fetch_dependencies_by_file",
-                file_name=rel_path,
-                start=start_line,
-                end=end_line,
-                level=1
-            )
-
-            msg = response.get("message", "")
-            data = response.get("data", [])
-            logger.debug(
-                f"    CCLS response: msg='{msg}', data_items={len(data) if isinstance(data, list) else type(data).__name__}"
-            )
-
-            if not data:
-                return ""
-
-            # Format the JSON data into a C-comment style block for the LLM
-            context_str = []
-            if isinstance(data, list):
-                for item in data[:10]: # Limit to top 10 to save tokens
-                    if isinstance(item, dict):
-                        name = item.get("name", "Unknown")
-                        # "definition" is the key returned by CCLSDependencyBuilder
-                        snippet = (item.get("definition") or item.get("snippet") or "").strip()
-                        file_src = item.get("file", "")
-                        if snippet:
-                            context_str.append(f"// {name} from {file_src}:\n{snippet}")
-
-            result = "\n\n".join(context_str)
-            if result:
-                logger.debug(f"    CCLS context: {len(context_str)} definitions, {len(result)} chars")
-            else:
-                logger.debug(f"    CCLS context: empty (data had {len(data)} items but no usable definitions)")
-            return result
-
-        except Exception as e:
-            logger.warning(f"[!] Warning: Dependency fetch failed for {rel_path}: {e}")
-            return ""
 
     def _smart_chunk_code(self, content: str) -> List[Tuple[str, int]]:
         """

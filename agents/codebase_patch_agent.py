@@ -319,8 +319,7 @@ class CodebasePatchAgent:
                     exclude_dirs=list(self.exclude_dirs),
                     exclude_globs=self.exclude_globs,
                     header_context_builder=self.header_context_builder,
-                    use_verible=False,  # CCLS not applicable for HDL
-                    ccls_navigator=None,
+                    use_verible=False,
                     max_trace_depth=3,
                     max_context_chars=1200,
                     cache_dir=_csa_cache_dir,
@@ -419,13 +418,6 @@ class CodebasePatchAgent:
                     shutil.rmtree(str(self._temp_dir), ignore_errors=True)
                 except Exception as e:
                     self.logger.warning(f"Failed to cleanup temp dir: {e}")
-            # Cleanup CCLS temporary JSON artifacts (preserve .ccls-cache)
-            self._cleanup_ccls_artifacts()
-
-    def _cleanup_ccls_artifacts(self):
-        """No-op for HDL analysis. CCLS cleanup is not applicable to Verilog/SystemVerilog."""
-        pass
-
     # ------------------------------------------------------------------
     # Pipeline
     # ------------------------------------------------------------------
@@ -1717,7 +1709,7 @@ class CodebasePatchAgent:
             for name, adapter in adapters:
                 try:
                     result = adapter.analyze(
-                        file_cache, ccls_navigator=None, dependency_graph={}
+                        file_cache, dependency_graph={}
                     )
                     if not result.get("tool_available", False):
                         self.logger.info(f"    Adapter {name}: tool not available, skipped")

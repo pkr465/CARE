@@ -367,9 +367,6 @@ class CodebaseFixerAgent:
         elif not email_recipients:
             self.logger.info("[!] No email recipients configured. Report saved to: " + report_path)
 
-        # -- CCLS temporary artifact cleanup --------------------------------
-        self._cleanup_ccls_artifacts()
-
         return {
             "status": "completed",
             "report_path": report_path,
@@ -1246,14 +1243,6 @@ class CodebaseFixerAgent:
             self.logger.error(f"Failed to write patched file for {file_path.name}: {e}")
             if tmp_path and tmp_path.exists():
                 os.remove(tmp_path)
-
-    def _cleanup_ccls_artifacts(self):
-        """Remove temporary CCLS JSON artifacts from the output directory.
-
-        NOTE: CCLS is not used for HDL projects. This method is kept for
-        backward compatibility but does nothing.
-        """
-        pass
 
     def _save_report(self, results: List[Dict], filename: str) -> str:
         """

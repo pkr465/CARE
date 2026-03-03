@@ -28,7 +28,7 @@ Usage:
     port     = config.get_int("database.port", 5432)
     debug    = config.get_bool("logging.debug", False)
     out_dir  = config.get_path("paths.out_dir")
-    patterns = config.get_list("dependency_builder.ccls_ignore_patterns")
+    patterns = config.get_list("dependency_builder.ignore_patterns")
 
     # Flat-key backward compatibility (works like EnvConfig)
     model    = config.get("LLM_MODEL")  # maps to llm.model

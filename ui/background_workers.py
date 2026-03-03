@@ -30,7 +30,6 @@ for _noisy in (
     "httpcore", "httpx", "httpcore.http11", "httpcore.connection",
     "requests", "openai", "anthropic", "PIL", "PIL.PngImagePlugin",
     "matplotlib", "chardet", "charset_normalizer",
-    "dependency_builder", "DependencyFetcher",
 ):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 
@@ -122,7 +121,7 @@ class LogCaptureHandler(logging.Handler):
             2: ["batch analysis", "analyzing batch", "batch processing", "analyzer",
                 "analyzing:", "processing chunk", "analysis (run id"],
             3: ["dependency graph", "building graph", "dependency analysis",
-                "dependency fetch", "ccls"],
+                "dependency fetch"],
             4: ["health metrics", "calculating metrics", "health score",
                 "critical issues"],
             5: ["llm enrichment", "llm analysis", "llm call", "semantic analysis",

@@ -277,7 +277,7 @@ excel:
 
 # ----------------------------------------------------------------------------
 # Hierarchy Builder — Verible & Verilator configuration for HDL analysis
-# Replaces CCLS for Verilog/SystemVerilog design hierarchy extraction
+# Verible & Verilator configuration for HDL design hierarchy extraction
 # ----------------------------------------------------------------------------
 hierarchy_builder:
   verible_executable: verible-verilog-syntax

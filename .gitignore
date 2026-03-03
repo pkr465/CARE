@@ -14,7 +14,6 @@ out/
 
 # OS files
 .DS_Store
-ccls.log
 .DS_Store
 *.tmp
 ~$Big_Picture_Pipeline.pptx

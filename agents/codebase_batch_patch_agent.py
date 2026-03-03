@@ -607,9 +607,6 @@ class CodebaseBatchPatchAgent:
             if result:
                 patched_files.append(result)
 
-        # CCLS temporary artifact cleanup
-        self._cleanup_ccls_artifacts()  # No-op for HDL
-
         # Summary
         self.logger.info(
             f"Summary: {self.patched_count} patched, "
@@ -626,12 +623,6 @@ class CodebaseBatchPatchAgent:
             "files": patched_files,
             "output_dir": str(self.patched_dir),
         }
-
-    # ─── CCLS cleanup ─────────────────────────────────────────────────
-
-    def _cleanup_ccls_artifacts(self):
-        """No-op for HDL analysis. CCLS cleanup is not applicable to Verilog/SystemVerilog."""
-        pass
 
     # ─── Per-file processing ──────────────────────────────────────────
 
