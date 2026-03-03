@@ -420,17 +420,9 @@ class HDLContextBuilder:
 
             # Skip system packages if configured
             if self.exclude_system_headers:
-                # Check against known standard packages
                 basename = os.path.basename(inc_name).replace(".svh", "").replace(".vh", "")
                 if inc_name in _SYSTEM_PACKAGES or basename in _SYSTEM_PACKAGES:
                     continue
-
-        # Also process import statements
-        for match in _IMPORT_RE.finditer(content):
-            pkg_name = match.group(1)
-            if self.exclude_system_headers and pkg_name in _SYSTEM_PACKAGES:
-                continue
-            # Note: imports don't have file paths, so we skip resolution for now
 
             resolved_path = self._resolve_include_path(inc_name, inc_type, file_dir)
 
@@ -463,7 +455,6 @@ class HDLContextBuilder:
                             seen_paths.add(si.abs_path)
                             result.append(si)
             elif not resolved_path:
-                # Unresolved — log diagnostic info to help debug
                 logger.debug(
                     "  Unresolved include: %s (%s) in %s "
                     "(codebase_path=%s, file_dir=%s, include_paths=%s)",
@@ -471,6 +462,13 @@ class HDLContextBuilder:
                     self.codebase_path, file_dir,
                     [str(p) for p in self.include_paths],
                 )
+
+        # Also process import statements (package-level, no file resolution)
+        for match in _IMPORT_RE.finditer(content):
+            pkg_name = match.group(1)
+            if self.exclude_system_headers and pkg_name in _SYSTEM_PACKAGES:
+                continue
+            # Note: imports reference packages, not files — no path resolution needed
 
         self._include_cache[abs_path] = result
         return result

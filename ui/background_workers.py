@@ -264,10 +264,10 @@ def run_analysis_background(
         if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler):
             root_logger.removeHandler(h)
 
-    # Install log capture handler — UI console only sees WARNING+
+    # Install log capture handler — UI console sees INFO+
     log_handler = LogCaptureHandler(log_queue, phase_tracker=phase_statuses)
     log_handler.setFormatter(logging.Formatter("%(message)s"))
-    log_handler.setLevel(logging.WARNING)
+    log_handler.setLevel(logging.INFO)
     root_logger.addHandler(log_handler)
 
     # Debug file handler — writes all DEBUG+ logs to {output_dir}/debug.log
@@ -384,6 +384,21 @@ def run_analysis_background(
             )
 
             phase_statuses[1] = "completed"
+
+            # Report context builder availability
+            ctx_status = []
+            if agent.header_context_builder:
+                ctx_status.append("HeaderContext")
+            if agent.context_validator:
+                ctx_status.append("ContextValidator")
+            if agent.call_stack_analyzer:
+                ctx_status.append("CallStackAnalyzer")
+            if agent.param_validator:
+                ctx_status.append("ParamValidator")
+            if ctx_status:
+                _push_log(log_queue, f"Context builders active: {', '.join(ctx_status)}")
+            else:
+                _push_log(log_queue, "No context builders active (header/caller context unavailable)")
 
             # Phase 1B: Build design context from constraint files
             try:

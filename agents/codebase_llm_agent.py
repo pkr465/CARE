@@ -692,6 +692,25 @@ class CodebaseLLMAgent:
                         f"\n{design_context_str}\n"
                     )
 
+                # Log context summary for this chunk
+                ctx_parts = []
+                if header_context:
+                    ctx_parts.append(f"header={len(header_context)}ch")
+                if validation_context:
+                    ctx_parts.append(f"validation={len(validation_context)}ch")
+                if call_stack_context:
+                    ctx_parts.append(f"callstack={len(call_stack_context)}ch")
+                if param_validation_context:
+                    ctx_parts.append(f"params={len(param_validation_context)}ch")
+                if design_context_str:
+                    ctx_parts.append(f"design={len(design_context_str)}ch")
+                if dependency_context:
+                    ctx_parts.append(f"deps={len(dependency_context)}ch")
+                if ctx_parts:
+                    logger.info(
+                        f"    Context injected for chunk {chunk_idx+1}: {', '.join(ctx_parts)}"
+                    )
+
                 final_chunk_text = (
                     f"{context_header}\n"
                     f"// ... [CURRENT CHUNK START: {rel_path} Lines {start_line}-{end_line}] ...\n"

@@ -581,49 +581,25 @@ class CodebaseFixerAgent:
 
     def _fetch_dependencies(self, file_path_abs: str, start_line: int, end_line: int) -> str:
         """
-        Fetches semantic definitions (structs, globals) to guide the LLM fix.
-        [FIX] Hardened against malformed/None responses from HDLDependencyAnalyzer.
+        Fetches module-level dependency info to guide the LLM fix.
+        Uses HDLDependencyAnalyzer.get_module_dependencies() for file-level context.
         """
-        if not self.dep_service: return ""
+        if not self.dep_service:
+            return ""
         try:
-            response = self.dep_service.perform_fetch(
-                project_root=str(self.codebase_root),
-                output_dir=self.output_dir,
-                codebase_identifier=self.project_name,
-                endpoint_type="fetch_dependencies_by_file",
-                file_name=file_path_abs,
-                start=start_line,
-                end=end_line,
-                level=1
-            )
-            
-            # Safe parsing
+            response = self.dep_service.get_module_dependencies(file_path_abs)
+
             if not response or not isinstance(response, dict):
                 return ""
-            
-            data = response.get("data", [])
-            if not data or not isinstance(data, list):
-                return ""
 
-            context_str = []
-            for item in data[:10]:
-                if not item: continue
-                
-                # Handle both Dict and Object responses safely
-                if isinstance(item, dict):
-                    name = item.get("name", "Unknown")
-                    kind = item.get("kind", "Unknown")
-                    snippet = item.get("snippet", "").strip()
-                else:
-                    # Fallback for objects
-                    name = getattr(item, "name", "Unknown")
-                    kind = getattr(item, "kind", "Unknown")
-                    snippet = getattr(item, "snippet", "").strip()
+            # Format any available dependency info
+            parts = []
+            for key in ("instantiations", "includes", "imports"):
+                items = response.get(key, [])
+                if items:
+                    parts.append(f"// {key}: {', '.join(str(i) for i in items[:10])}")
 
-                if snippet:
-                    context_str.append(f"// ({kind}) {name}:\n{snippet}")
-
-            return "\n\n".join(context_str)
+            return "\n".join(parts) if parts else ""
         except Exception as e:
             self.logger.warning(f"Dependency fetch skipped due to error: {e}")
             return ""

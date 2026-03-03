@@ -360,6 +360,19 @@ def app_css() -> None:
         ::-webkit-scrollbar-thumb:hover {{
             background: rgba(0,212,170,0.35);
         }}
+
+        /* ── Download buttons ───────────────────────────────────── */
+        [data-testid="stDownloadButton"] > button {{
+            background: linear-gradient(135deg, {CARE_PRIMARY}, {CARE_ACCENT}) !important;
+            color: #061220 !important;
+            border: none !important;
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+        }}
+        [data-testid="stDownloadButton"] > button:hover {{
+            box-shadow: 0 0 15px rgba(0,212,170,0.25) !important;
+            opacity: 0.9;
+        }}
         </style>
         """,
         unsafe_allow_html=True,
