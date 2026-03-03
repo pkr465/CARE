@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import fnmatch
 import os
 import re
@@ -20,11 +22,19 @@ try:
     from agents.analyzers.dependency_analyzer import HDLDependencyAnalyzer, AnalyzerConfig
     DEPENDENCY_SERVICES_AVAILABLE = True
 except ImportError:
-    logger = logging.getLogger(__name__)
-    logger.warning("HDL Dependency Analyzer not found. Running in standalone heuristic mode.")
     HDLDependencyAnalyzer = None
     AnalyzerConfig = None
     DEPENDENCY_SERVICES_AVAILABLE = False
+
+# --- Optional CCLS / Dependency Builder Services ---
+try:
+    from agents.services.dependency_builder import (
+        DependencyBuilderConfig, CCLSIngestion, DependencyService
+    )
+except ImportError:
+    DependencyBuilderConfig = None
+    CCLSIngestion = None
+    DependencyService = None
 
 # Try importing the prompt
 try:
@@ -194,7 +204,7 @@ class CodebaseLLMAgent:
 
         # --- Initialize Services based on Flag AND Availability ---
         if self.use_verible:
-            if DEPENDENCY_SERVICES_AVAILABLE:
+            if DEPENDENCY_SERVICES_AVAILABLE and CCLSIngestion is not None and DependencyService is not None:
                 logger.info("[*] CCLS Dependency Services ENABLED.")
                 dep_cfg = dep_config or (
                     DependencyBuilderConfig.from_env() if DependencyBuilderConfig else None
