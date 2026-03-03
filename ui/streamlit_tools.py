@@ -703,6 +703,7 @@ PHASE_ICONS = {
     "in_progress": "⏳",
     "pending": "○",
     "error": "❌",
+    "stopped": "⛔",
 }
 
 
@@ -734,6 +735,9 @@ def render_phase_tracker(
         elif status == "error":
             color = CARE_RED
             bg = "rgba(239,68,68,0.08)"
+        elif status == "stopped":
+            color = "#F59E0B"  # amber/warning
+            bg = "rgba(245,158,11,0.08)"
 
         with cols[i]:
             st.markdown(
@@ -1012,22 +1016,14 @@ def folder_browser(
             if not os.path.isdir(start):
                 start = os.path.dirname(start) if os.path.exists(os.path.dirname(start)) else str(Path.home())
 
-            # Decide: file picker vs folder picker
-            picked = ""
-            if show_files and file_extensions:
-                # Build filetypes for native dialog
-                ext_patterns = " ".join(f"*{e}" for e in file_extensions)
-                filetypes = [("Matching files", ext_patterns), ("All files", "*.*")]
-                picked = _open_native_file_dialog(
-                    initial_dir=start,
-                    title=f"Select File — {label}",
-                    filetypes=filetypes,
-                )
-            else:
-                picked = _open_native_folder_dialog(
-                    initial_dir=start,
-                    title=f"Select Folder — {label}",
-                )
+            # Always open the FOLDER picker as the primary dialog.
+            # `show_files` only controls whether the in-page fallback
+            # browser displays HDL files alongside folders — it should
+            # NOT redirect the native dialog to a file-only picker.
+            picked = _open_native_folder_dialog(
+                initial_dir=start,
+                title=f"Select Folder — {label}",
+            )
 
             if picked:
                 # Native dialog succeeded

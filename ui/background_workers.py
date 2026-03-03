@@ -228,6 +228,21 @@ FIXER_PHASES = {
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  Stop-signal helper
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class PipelineStopped(Exception):
+    """Raised when the user requests a pipeline halt."""
+
+
+def _check_stop(stop_event: Optional[threading.Event], log_queue: Queue) -> None:
+    """Raise ``PipelineStopped`` if the stop event is set."""
+    if stop_event is not None and stop_event.is_set():
+        _push_log(log_queue, "⛔ Pipeline stopped by user.")
+        raise PipelineStopped("Pipeline halted by user request")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  Analysis background runner
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -235,6 +250,7 @@ def run_analysis_background(
     config: Dict[str, Any],
     log_queue: Queue,
     result_store: Dict[str, Any],
+    stop_event: Optional[threading.Event] = None,
 ) -> None:
     """
     Run codebase analysis in a background thread.
@@ -439,6 +455,8 @@ def run_analysis_background(
             except Exception as e:
                 _push_log(log_queue, f"Design context build skipped: {e}", level="WARNING")
 
+            _check_stop(stop_event, log_queue)
+
             # Phase 2-4: LLM Analysis (bulk of the work)
             phase_statuses[2] = "in_progress"
             result_store["phase_statuses"] = phase_statuses
@@ -453,6 +471,8 @@ def run_analysis_background(
             phase_statuses[3] = "completed"
             phase_statuses[4] = "completed"
             result_store["phase_statuses"] = phase_statuses
+
+            _check_stop(stop_event, log_queue)
 
             # Run deep static adapters if enabled (after LLM analysis)
             adapter_results = None
@@ -520,6 +540,8 @@ def run_analysis_background(
             else:
                 phase_statuses[5] = "completed"
 
+            _check_stop(stop_event, log_queue)
+
             # Phase 6: Report Generation
             phase_statuses[6] = "in_progress"
             result_store["phase_statuses"] = phase_statuses
@@ -533,6 +555,8 @@ def run_analysis_background(
             _push_log(log_queue, f"LLM analysis complete. Report: {report_path}")
 
             phase_statuses[6] = "completed"
+
+            _check_stop(stop_event, log_queue)
 
             # Phase 7: Vector DB ingestion (if enabled)
             phase_statuses[7] = "in_progress"
@@ -643,6 +667,20 @@ def run_analysis_background(
                 metadata={"use_verible": config.get("use_verible", False)},
             )
 
+    except PipelineStopped:
+        result_store["status"] = "stopped"
+        for p in phase_statuses:
+            if phase_statuses[p] == "in_progress":
+                phase_statuses[p] = "stopped"
+        result_store["phase_statuses"] = phase_statuses
+        if telemetry and run_id:
+            telemetry.finish_run(
+                run_id=run_id,
+                status="stopped",
+                duration_seconds=time.time() - start_time,
+                metadata={"stopped_by_user": True},
+            )
+
     except Exception as e:
         _push_log(log_queue, f"Analysis failed: {e}", level="ERROR")
         result_store["status"] = f"error: {e}"
@@ -673,6 +711,7 @@ def run_fixer_background(
     config: Dict[str, Any],
     log_queue: Queue,
     result_store: Dict[str, Any],
+    stop_event: Optional[threading.Event] = None,
 ) -> None:
     """
     Run the fixer workflow in a background thread.
@@ -781,6 +820,8 @@ def run_fixer_background(
 
         phase_statuses[1] = "completed"
 
+        _check_stop(stop_event, log_queue)
+
         # Phase 2-3: Apply fixes (the agent handles these internally)
         phase_statuses[2] = "in_progress"
         _push_log(log_queue, "Phase 2: Applying fixes...")
@@ -791,6 +832,8 @@ def run_fixer_background(
 
         phase_statuses[2] = "completed"
         phase_statuses[3] = "completed"
+
+        _check_stop(stop_event, log_queue)
 
         # Phase 4: Report
         phase_statuses[4] = "in_progress"
@@ -835,6 +878,20 @@ def run_fixer_background(
                 duration_seconds=duration,
             )
 
+    except PipelineStopped:
+        result_store["fixer_status"] = "stopped"
+        for p in phase_statuses:
+            if phase_statuses[p] == "in_progress":
+                phase_statuses[p] = "stopped"
+        result_store["fixer_phase_statuses"] = phase_statuses
+        if telemetry and run_id:
+            telemetry.finish_run(
+                run_id=run_id,
+                status="stopped",
+                duration_seconds=time.time() - start_time,
+                metadata={"stopped_by_user": True},
+            )
+
     except Exception as e:
         _push_log(log_queue, f"Fixer workflow failed: {e}", level="ERROR")
         result_store["fixer_status"] = f"error: {e}"
@@ -875,6 +932,7 @@ def run_patch_analysis_background(
     config: Dict[str, Any],
     log_queue: Queue,
     result_store: Dict[str, Any],
+    stop_event: Optional[threading.Event] = None,
 ) -> None:
     """
     Run patch analysis in a background thread.
@@ -1000,6 +1058,8 @@ def run_patch_analysis_background(
         except Exception:
             pass
 
+        _check_stop(stop_event, log_queue)
+
         # Run patch analysis
         from agents.codebase_patch_agent import CodebasePatchAgent
 
@@ -1091,6 +1151,20 @@ def run_patch_analysis_background(
                 issues_medium=sev_counts.get("MEDIUM", 0),
                 issues_low=sev_counts.get("LOW", 0),
                 duration_seconds=time.time() - start_time,
+            )
+
+    except PipelineStopped:
+        result_store["status"] = "stopped"
+        for p in phase_statuses:
+            if phase_statuses[p] == "in_progress":
+                phase_statuses[p] = "stopped"
+        result_store["phase_statuses"] = phase_statuses
+        if telemetry and run_id:
+            telemetry.finish_run(
+                run_id=run_id,
+                status="stopped",
+                duration_seconds=time.time() - start_time,
+                metadata={"stopped_by_user": True},
             )
 
     except Exception as e:

@@ -591,16 +591,18 @@ def page_analyze():
 
             log_queue = Queue()
             result_store = {"status": "running", "phase_statuses": {}}
+            stop_event = threading.Event()
 
             st.session_state["log_queue"] = log_queue
             st.session_state["result_store"] = result_store
+            st.session_state["stop_event"] = stop_event
             st.session_state["pipeline_logs"] = []
             st.session_state["phase_statuses"] = {i: "pending" for i in range(1, 8)}
             st.session_state["analysis_mode"] = "Patch Analysis"
 
             t = threading.Thread(
                 target=run_patch_analysis_background,
-                args=(config, log_queue, result_store),
+                args=(config, log_queue, result_store, stop_event),
                 daemon=True,
             )
             t.start()
@@ -665,19 +667,21 @@ def page_analyze():
             # Clean previous run artifacts from the output directory
             _clean_output_dir(config["output_dir"])
 
-            # Initialize queue and result store
+            # Initialize queue, result store, and stop event
             log_queue = Queue()
             result_store = {"status": "running", "phase_statuses": {}}
+            stop_event = threading.Event()
 
             st.session_state["log_queue"] = log_queue
             st.session_state["result_store"] = result_store
+            st.session_state["stop_event"] = stop_event
             st.session_state["pipeline_logs"] = []
             st.session_state["phase_statuses"] = {i: "pending" for i in range(1, 8)}
 
             # Launch background thread
             t = threading.Thread(
                 target=run_analysis_background,
-                args=(config, log_queue, result_store),
+                args=(config, log_queue, result_store, stop_event),
                 daemon=True,
             )
             t.start()
@@ -700,10 +704,14 @@ def page_pipeline():
 
     in_progress = st.session_state.get("analysis_in_progress", False)
     is_complete = st.session_state.get("analysis_complete", False)
+    is_stopped = st.session_state.get("analysis_stopped", False)
 
-    if not in_progress and not is_complete:
+    if not in_progress and not is_complete and not is_stopped:
         st.info("No analysis running. Go to **Analyze** to start one.")
         return
+
+    if is_stopped and not in_progress:
+        st.warning("Pipeline was stopped by user. Partial results may be available.")
 
     # Phase tracker — pick the right set of phase labels
     is_patch = st.session_state.get("analysis_mode") == "Patch Analysis"
@@ -731,11 +739,14 @@ def page_pipeline():
             st.session_state["analysis_complete"] = True
 
             # Harvest results from shared store
-            if result_store.get("status") == "success":
+            status = result_store.get("status", "")
+            if status == "success":
                 st.session_state["analysis_results"] = result_store.get("analysis_results", [])
                 st.session_state["analysis_metrics"] = result_store.get("analysis_metrics", {})
                 # Invalidate cached feedback DataFrame so Review tab rebuilds it
                 st.session_state["feedback_df"] = None
+            elif status == "stopped":
+                st.session_state["analysis_stopped"] = True
             st.rerun()
 
     # Log stream
@@ -743,6 +754,13 @@ def page_pipeline():
     st_tools.render_log_stream(st.session_state.get("pipeline_logs", []))
 
     if in_progress:
+        # Stop button
+        if st.button("⛔ Stop Pipeline", type="secondary"):
+            stop_event = st.session_state.get("stop_event")
+            if stop_event is not None:
+                stop_event.set()
+                st.warning("Stop signal sent — pipeline will halt after the current phase completes.")
+
         # Auto-refresh while running
         time.sleep(0.5)
         st.rerun()
@@ -1247,15 +1265,17 @@ def page_fixer_qa():
 
             fixer_queue = Queue()
             fixer_result_store = {"fixer_status": "running"}
+            fixer_stop_event = threading.Event()
 
             st.session_state["fixer_log_queue"] = fixer_queue
             st.session_state["fixer_result_store"] = fixer_result_store
+            st.session_state["fixer_stop_event"] = fixer_stop_event
             st.session_state["fixer_logs"] = []
             st.session_state["fixer_phase_statuses"] = {i: "pending" for i in range(1, 5)}
 
             t = threading.Thread(
                 target=run_fixer_background,
-                args=(config, fixer_queue, fixer_result_store),
+                args=(config, fixer_queue, fixer_result_store, fixer_stop_event),
                 daemon=True,
             )
             t.start()
@@ -1294,6 +1314,14 @@ def page_fixer_qa():
                 st.rerun()
 
         st_tools.render_log_stream(st.session_state.get("fixer_logs", []))
+
+        # Stop button for fixer
+        if st.button("⛔ Stop Fixer", type="secondary"):
+            fixer_stop = st.session_state.get("fixer_stop_event")
+            if fixer_stop is not None:
+                fixer_stop.set()
+                st.warning("Stop signal sent — fixer will halt after the current phase completes.")
+
         time.sleep(0.5)
         st.rerun()
 
