@@ -273,27 +273,36 @@ class QGenieProvider(BaseLLMProvider):
                 lc_messages.append(SystemMessage(content=content))
 
         try:
+            _tok = max_tokens or self.config.max_tokens
+            _temp = temperature if temperature is not None else self.config.temperature
+            prompt_chars = sum(len(m.content) for m in lc_messages)
+            logger.info(
+                "QGenie API call: model=%s prompt_chars=%d max_tokens=%d timeout=%ds",
+                self.config.model, prompt_chars, _tok, self.config.timeout,
+            )
+
             start = time.monotonic()
-            
-            # Invoke with specific params
+
             result = self.model_instance.invoke(
                 lc_messages,
-                max_tokens=max_tokens or self.config.max_tokens,
-                temperature=temperature if temperature is not None else self.config.temperature,
+                max_tokens=_tok,
+                temperature=_temp,
                 repetition_penalty=1.1,
                 top_k=50,
                 top_p=0.95,
             )
             elapsed = time.monotonic() - start
 
-            logger.debug(
-                "QGenie API: model=%s elapsed=%.2fs",
-                self.config.model, elapsed,
+            resp_chars = len(result.content) if result.content else 0
+            logger.info(
+                "QGenie API done: model=%s elapsed=%.1fs response_chars=%d",
+                self.config.model, elapsed, resp_chars,
             )
             return result.content
 
         except Exception as e:
-            logger.error("QGenie API error: %s", e)
+            elapsed = time.monotonic() - start
+            logger.error("QGenie API error after %.1fs: %s", elapsed, e)
             raise LLMProviderError(f"QGenie API call failed: {e}") from e
 
 
@@ -426,44 +435,49 @@ class LLMTools:
     # ------------------------------------------------------------------
 
     def llm_call(self, prompt, model=None):
-        from qgenie.integrations.langchain import QGenieChat
-        from langchain_core.messages import HumanMessage
-        
-        # 1. Determine which model name to use
-        # If 'model' argument is provided, use it; otherwise fallback to config.coding_model
-        target_model = model if model else self.config.coding_model
-        api_key = self.config.qgenie_api_key
+        """
+        Send a single-prompt completion via the pre-initialized QGenie provider.
 
+        Args:
+            prompt: The prompt text to send.
+            model:  Optional model override. If provided, a temporary provider
+                    is created for this call only.
+        Returns:
+            The text response from the LLM.
+        """
+        # If caller explicitly overrides the model, create a one-shot provider
+        if model and model != self.config.raw_model:
+            try:
+                tmp_config = LLMConfig(
+                    raw_model=model,
+                    coding_model=model,
+                    qgenie_api_key=self.config.qgenie_api_key,
+                    qgenie_endpoint=self.config.qgenie_endpoint,
+                    max_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature,
+                    timeout=self.config.timeout,
+                    max_retries=self.config.max_retries,
+                )
+                tmp_provider = create_provider(tmp_config)
+                return tmp_provider.complete(
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature,
+                )
+            except Exception as e:
+                logger.error("LLM invocation failed (model override %s): %s", model, e)
+                raise LLMProviderError(f"LLM invocation failed: {e}") from e
+
+        # Default path: reuse the pre-initialized provider
         try:
-            print(f"Initializing QGenieChat with MODEL: {target_model}")
-
-            # 2. Initialize the Client
-            # Renamed variable to 'chat_client' to avoid conflict with 'model' string
-            chat_client = QGenieChat(
-                model=target_model,
-                api_key=api_key,
-                timeout=15000
+            return self.provider.complete(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature,
             )
-
-            # 3. Prepare and Invoke
-            messages = [HumanMessage(content=prompt)]
-            
-            result = chat_client.invoke(
-                messages,
-                max_tokens=15000,
-                repetition_penalty=1.1,
-                temperature=0.1,
-                top_k=50,
-                top_p=0.95,
-            )
-            
-            return result.content
-
         except Exception as e:
-            logger.error(f"LLM invocation failed: {e}")
-            # Depending on your use case, you might want to 'raise e' here
-            # instead of returning a string error message.
-            return f"LLM invocation failed: {e}"
+            logger.error("LLM invocation failed: %s", e)
+            raise LLMProviderError(f"LLM invocation failed: {e}") from e
     
     # ------------------------------------------------------------------
     # Intent Extraction
