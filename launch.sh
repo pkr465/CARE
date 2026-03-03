@@ -79,8 +79,12 @@ fi
 if [[ -f ".env" ]]; then
     # Export all non-comment, non-empty lines as environment variables
     set -a
-    # shellcheck disable=SC1091
-    source <(grep -vE '^\s*(#|$)' .env | sed 's/\r$//')
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Strip carriage returns, skip comments and blank lines
+        line="${line%$'\r'}"
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        eval "export $line" 2>/dev/null || true
+    done < .env
     set +a
     echo -e "${GREEN}[✓]${NC} Loaded environment from .env"
 fi

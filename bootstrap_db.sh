@@ -54,6 +54,15 @@ err()   { echo -e "${RED}[ERROR]${NC} $*"; }
 OS_TYPE="linux"
 if [[ "$(uname -s)" == "Darwin" ]]; then
     OS_TYPE="macos"
+    # Ensure Homebrew is on PATH (may be missing in non-login shells / PowerShell)
+    if ! command -v brew &>/dev/null; then
+        for _brew_candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+            if [[ -x "$_brew_candidate" ]]; then
+                eval "$("$_brew_candidate" shellenv)"
+                break
+            fi
+        done
+    fi
 fi
 
 # ---------- Detect the real (non-root) user ----------

@@ -83,11 +83,23 @@ IS_WSL=false
 case "$(uname -s)" in
     Darwin)
         OS_TYPE="macos"
+        # Homebrew may not be on PATH in non-login shells (e.g. invoked from
+        # PowerShell, VS Code terminal, or cron).  Check standard locations.
+        if ! command -v brew &>/dev/null; then
+            for _brew_candidate in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+                if [[ -x "$_brew_candidate" ]]; then
+                    eval "$("$_brew_candidate" shellenv)"
+                    break
+                fi
+            done
+        fi
         if command -v brew &>/dev/null; then
             PKG_MANAGER="brew"
         else
-            err "Homebrew is required on macOS."
-            err "Install it: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+            err "Homebrew is required on macOS but was not found."
+            err "Install it:"
+            err '  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+            err "Then re-run this script."
             exit 1
         fi
         ;;
@@ -239,7 +251,36 @@ substep "Upgrading pip..."
 pip install --upgrade pip --quiet 2>/dev/null
 
 # ============================================================================
-# Step 3: Python Dependencies
+# Step 3a: QGenie SDK (default LLM provider — must install before requirements)
+# ============================================================================
+# QGenie is hosted on Qualcomm's internal DevPI and must be installed first
+# so that LangChain integration packages resolve correctly.
+step "Installing QGenie SDK"
+
+QGENIE_INDEX="https://devpi.qualcomm.com/qcom/dev/+simple"
+QGENIE_HOST="devpi.qualcomm.com"
+
+if python -c "import qgenie_sdk" 2>/dev/null; then
+    info "QGenie SDK already installed"
+else
+    substep "Installing qgenie-sdk[all] + qgenie-sdk-tools from DevPI..."
+    if pip install "qgenie-sdk[all]" qgenie-sdk-tools \
+            -i "$QGENIE_INDEX" --trusted-host "$QGENIE_HOST" \
+            --quiet 2>&1 | tail -3; then
+        info "QGenie SDK installed successfully"
+    else
+        warn "Failed to install QGenie SDK from ${QGENIE_HOST}."
+        warn "This is expected if you're not on the Qualcomm network."
+        warn "You can install it later when connected:"
+        echo -e "    ${CYAN}pip install qgenie-sdk[all] qgenie-sdk-tools \\${NC}"
+        echo -e "    ${CYAN}    -i ${QGENIE_INDEX} \\${NC}"
+        echo -e "    ${CYAN}    --trusted-host ${QGENIE_HOST}${NC}"
+        warn "Alternatively, set llm_provider to 'anthropic' in global_config.yaml."
+    fi
+fi
+
+# ============================================================================
+# Step 3b: Python Dependencies
 # ============================================================================
 step "Installing Python dependencies"
 

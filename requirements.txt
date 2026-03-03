@@ -12,6 +12,13 @@ langchain>=0.1.0
 langgraph>=0.0.1
 networkx>=3.0
 
+# --- QGenie (default LLM provider — install BEFORE requirements.txt) ---
+# Internal package from Qualcomm's DevPI. Install separately:
+#   pip install qgenie-sdk[all] qgenie-sdk-tools \
+#       -i https://devpi.qualcomm.com/qcom/dev/+simple \
+#       --trusted-host devpi.qualcomm.com
+# Falls back gracefully if unavailable; set llm_provider: "anthropic" instead.
+
 # --- Visualization & Data ---
 colorama==0.4.6
 openpyxl>=3.1.2
