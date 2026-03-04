@@ -148,6 +148,22 @@ database:
   vector_database: postgres # postgres | chroma | pinecone
 
 # ----------------------------------------------------------------------------
+# Analysis — LLM code review pipeline settings
+# ----------------------------------------------------------------------------
+analysis:
+  # ── Chunking ────────────────────────────────────────────────────────────
+  # Verilog/SystemVerilog files are typically small enough to fit in a single
+  # LLM context window.  Disabling chunking sends the ENTIRE file in one
+  # request, preserving full cross-module context and eliminating split
+  # artifacts.  When enabled, files are split at module/endmodule boundaries.
+  enable_chunking: false          # true = split large files | false = send whole file
+
+  # Maximum chunk size in estimated tokens (only used when enable_chunking: true).
+  # Modern models support 128k-1M context; 150 000 tokens covers most RTL files.
+  # ~4 chars per token heuristic → 150 000 tokens ≈ 600 000 chars.
+  chunk_size_tokens: 150000
+
+# ----------------------------------------------------------------------------
 # Scanning — File discovery exclusions (HDL-specific)
 # ----------------------------------------------------------------------------
 # Both options accept multiple entries as YAML lists.

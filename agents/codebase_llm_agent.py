@@ -93,9 +93,11 @@ class CodebaseLLMAgent:
     - Configuration-driven email recipients
     """
 
-    # Chunking Config
-    TARGET_CHUNK_CHARS = 12000  # ~3k tokens
+    # Chunking Config (defaults — overridden by global_config.yaml analysis section)
+    DEFAULT_CHUNK_SIZE_TOKENS = 150000   # ~150k tokens ≈ 600k chars
+    TARGET_CHUNK_CHARS = 600000          # Computed from DEFAULT_CHUNK_SIZE_TOKENS * 4
     OVERLAP_LINES = 25
+    ENABLE_CHUNKING = False              # Default: send whole file
 
     def __init__(
         self,
@@ -184,6 +186,23 @@ class CodebaseLLMAgent:
                 self.llm_tools = LLMTools()
         else:
             self.llm_tools = LLMTools()
+
+        # --- Chunking config from global_config.yaml → analysis section ---
+        if self.config:
+            self.enable_chunking = self.config.get_bool(
+                "analysis.enable_chunking", self.ENABLE_CHUNKING
+            )
+            _chunk_tokens = self.config.get_int(
+                "analysis.chunk_size_tokens", self.DEFAULT_CHUNK_SIZE_TOKENS
+            )
+        else:
+            self.enable_chunking = self.ENABLE_CHUNKING
+            _chunk_tokens = self.DEFAULT_CHUNK_SIZE_TOKENS
+        self.TARGET_CHUNK_CHARS = _chunk_tokens * 4  # ~4 chars per token heuristic
+        logger.info(
+            f"[*] Chunking: {'enabled' if self.enable_chunking else 'disabled (whole-file mode)'}"
+            f" | chunk_size={_chunk_tokens:,} tokens ({self.TARGET_CHUNK_CHARS:,} chars)"
+        )
 
         self.results: List[Dict] = []
         self.errors: List[Dict] = []
@@ -908,11 +927,19 @@ class CodebaseLLMAgent:
         Ensures splits happen at module boundaries where possible.
         Falls back to always-block preservation for smaller chunks.
 
-        For Verilog/SystemVerilog:
+        When ``enable_chunking`` is False (default), the entire file is
+        returned as a single chunk regardless of size — this preserves full
+        cross-module context for the LLM.
+
+        For Verilog/SystemVerilog (when chunking IS enabled):
         - Splits at module/endmodule boundaries
         - Keeps always blocks intact
         - Uses line-based overlap (25 lines) for context continuity
         """
+        # Whole-file mode: skip all chunking logic
+        if not self.enable_chunking:
+            return [(content, 1)]
+
         if len(content) < self.TARGET_CHUNK_CHARS * 1.5:
             return [(content, 1)]
 
