@@ -1036,12 +1036,12 @@ class CodebaseLLMAgent:
             if not code_match:
                 code_match = re.search(r"Code:\s*(.+?)(?=\nFixed_Code:|$)", block, re.DOTALL)
             raw_code_snippet = code_match.group(1).strip() if code_match else ""
-            issue_data["HDL_Code"] = raw_code_snippet  # HDL-specific column name
+            issue_data["Code"] = raw_code_snippet
 
             fixed_match = re.search(r"Fixed_Code:\s*```(?:\w+)?\n(.*?)\n```", block, re.DOTALL)
             if not fixed_match:
                 fixed_match = re.search(r"Fixed_Code:\s*(.+?)(?=$)", block, re.DOTALL)
-            issue_data["Fixed_HDL_Code"] = fixed_match.group(1).strip() if fixed_match else "N/A"  # HDL-specific column name
+            issue_data["Fixed_Code"] = fixed_match.group(1).strip() if fixed_match else "N/A"
 
             # --- ANCHOR LOGIC ---
             calculated_line = 0
