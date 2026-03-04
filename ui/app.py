@@ -121,7 +121,7 @@ _DEFAULTS = {
     "max_files": 2000,
     "batch_size": 25,
     "use_llm": True,
-    "enable_adapters": False,
+    "enable_adapters": True,
     "use_verible": False,
     "exclude_dirs": "",
     "exclude_globs": "",
@@ -478,12 +478,12 @@ def page_analyze():
             st.session_state["batch_size"] = batch_size
 
     # Advanced options (shared by all modes)
-    with st.expander("Advanced Options"):
+    with st.expander("Advanced Options", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
             enable_adapters = st.checkbox(
                 "Enable Deep Adapters (Verilator, Verible)",
-                value=False,
+                value=True,
             )
             st.session_state["enable_adapters"] = enable_adapters
 
