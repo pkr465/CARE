@@ -95,6 +95,27 @@ The `StaticAnalyzerAgent` runs 7 phases in sequence:
 6. **Report Generation** — Writes `designhealth.json`, Excel workbooks, optional HTML reports, and email notifications.
 7. **Visualization** — Generates Mermaid diagrams for module hierarchy, dependency graphs, and architecture views.
 
+### 4-Phase Fixer Pipeline
+
+The `CodebaseFixerAgent` runs 4 phases when applying LLM-guided repairs:
+
+1. **Parsing Directives** — Reads Excel feedback and extracts fix directives.
+2. **Applying Fixes** — Generates LLM-powered code repairs with constraint awareness.
+3. **Validating Integrity** — Checks that fixes preserve module signatures, ports, and clock domains.
+4. **Generating Audit Report** — Writes an audit trail of all applied changes.
+
+### 7-Phase Patch Analysis Pipeline
+
+The `CodebasePatchAgent` runs 7 phases for diff-based analysis:
+
+1. **Reading Source & Patch** — Loads original and patched HDL files.
+2. **Parsing Unified Diff** — Extracts hunks from unified diff format.
+3. **Applying Patch** — Reconstructs patched code from diff hunks.
+4. **LLM Analysis (Original vs Patched)** — Sends original and patched code to LLM for semantic review.
+5. **Static Analysis (Adapters)** — Runs deep adapters on both versions.
+6. **Diffing Findings** — Compares findings between original and patched code.
+7. **Report Generation** — Writes patch analysis results to Excel.
+
 ---
 
 ## Supported File Types
@@ -227,7 +248,7 @@ The `HDLDependencyAnalyzer` orchestrates 7 specialized services that build a com
 
 ## LLM Agents
 
-CARE includes 5 LLM-powered agents for semantic analysis, repair, and interactive exploration:
+CARE includes 6 agents for static analysis, semantic review, repair, and interactive exploration:
 
 ### StaticAnalyzerAgent
 The primary analysis orchestrator. Runs the 7-phase pipeline with optional LLM enrichment in Phase 5 (codebase insights, dependency analysis, documentation recommendations). Produces the canonical `designhealth.json`.
@@ -276,10 +297,28 @@ Hierarchical YAML configuration with `${ENV_VAR}` substitution for secrets:
 | `context` | Include file resolution depth, max context chars, system package exclusions |
 | `synthesis` | Target technology (fpga/asic), clock period, reset strategy |
 | `eda_tools` | Paths to Verilator, Verible, Yosys, Icarus Verilog |
+| `analysis` | Chunking control (`enable_chunking`, `chunk_size_tokens`) — send whole files or split for LLM context |
 | `hitl` | Feedback store enable, RAG settings, constraint file patterns |
 | `telemetry` | Silent PostgreSQL-backed usage tracking |
 | `email` | SMTP configuration for report delivery |
 | `excel` | Spreadsheet styling (colors, column widths, freeze/filter) |
+| `logging` | Log level configuration |
+| `tools` | External tool paths (Pandoc, mmdc) |
+| `mermaid` | Diagram rendering settings |
+| `dependency_analysis` | Module/include dependency graph configuration |
+| `embeddings` | Vector embedding model selection |
+
+### Analysis Chunking Configuration
+
+By default, CARE sends entire Verilog/SystemVerilog files to the LLM without chunking. This preserves full context (module boundaries, signal dependencies, clock domains) which is critical for HDL analysis accuracy. Modern LLMs with 128K–1M token context windows can handle typical HDL files whole.
+
+```yaml
+analysis:
+  enable_chunking: false        # false = send whole file (default)
+  chunk_size_tokens: 150000     # only used when enable_chunking: true
+```
+
+When `enable_chunking: true`, files are split into chunks of `chunk_size_tokens * 4` characters (approximating 4 chars per token). Each chunk is analyzed independently with overlap.
 
 ### Environment Variables (.env)
 
@@ -370,6 +409,10 @@ QGENIE_API_KEY=""       # Optional, for QGenie models
 │   │   ├── design_context.py           #   Dataclasses for clocks, constraints, waivers, blocks, registers
 │   │   ├── design_context_builder.py   #   6 parsers (SDC, TCL, SWL, BLK, VBLK, DESC) + orchestrator
 │   │   └── header_context_builder.py   #   Include/macro context injection
+│   │
+│   ├── constraints/                    # Design rule templates
+│   │   ├── TEMPLATE_constraints.md     #   Template for design rules
+│   │   └── common_constraints.md       #   Common HDL design constraints
 │   │
 │   ├── prompts/                        # LLM prompt templates
 │   │   └── prompts.py                  #   HDL-specific prompts
@@ -572,18 +615,51 @@ python run_e2e_test.py    # runs all 6 analyzers on sample_rtl/
 
 ---
 
+## Streamlit Dashboard
+
+The CARE dashboard (`./launch.sh`) provides a visual interface organized into 7 workflow tabs and 2 secondary pages:
+
+### Workflow Tabs
+
+| Tab | Purpose |
+|---|---|
+| **Analyze** | Configure input (local folder or patch), select analysis mode, set advanced options (deep adapters, Verible, chunking) |
+| **Pipeline** | Real-time pipeline execution with phase tracker, console output, and stop/halt controls |
+| **Review** | Review analysis results, LLM findings, adapter grades, and provide HITL feedback |
+| **Fix & QA** | Run the fixer agent on detected issues, QA traceability inspector |
+| **Audit** | Fixer audit reports and patch history |
+| **Constraints** | Design constraint generation and management |
+| **Telemetry** | Usage analytics and run history |
+
+### Secondary Pages
+
+| Page | Purpose |
+|---|---|
+| **Chat** | Interactive conversational HDL analysis with multi-turn state, vector DB search, and intent extraction |
+| **About** | Framework info and help |
+
+### Pipeline Controls
+
+The pipeline supports cooperative stop/halt via `threading.Event`. Stop buttons are available on the Pipeline and Fix & QA tabs. When stopped, the pipeline terminates gracefully between phases and reports a "stopped" status with amber indicators.
+
+### Advanced Options (Analysis Tab)
+
+Deep adapters (Verilator/Verible) and Verible semantic analysis are enabled by default. The Advanced Options expander includes toggles for deep adapters, Verible, dependency granularity (File/Module/Package), and file exclusion patterns.
+
+---
+
 ## Multi-Provider LLM Support
 
-CARE supports 4 LLM providers via the `provider::model_name` format:
+CARE uses a `provider::model_name` format for model specification. Two providers have full SDK backends; two additional providers are supported through configuration routing:
 
-| Provider | Example Model String | SDK |
-|---|---|---|
-| Anthropic | `anthropic::claude-sonnet-4-20250514` | anthropic |
-| QGenie | `qgenie::qwen2.5-14b-1m` | qgenie.integrations.langchain |
-| Vertex AI | `vertexai::gemini-2.5-pro` | langchain_google_vertexai |
-| Azure OpenAI | `azure::gpt-4.1` | langchain_openai.AzureChatOpenAI |
+| Provider | Example Model String | SDK | Status |
+|---|---|---|---|
+| Anthropic | `anthropic::claude-sonnet-4-20250514` | anthropic | Fully implemented |
+| QGenie | `qgenie::qwen2.5-14b-1m` | qgenie.integrations.langchain | Fully implemented |
+| Vertex AI | `vertexai::gemini-2.5-pro` | langchain_google_vertexai | Config-supported |
+| Azure OpenAI | `azure::gpt-5.2` | langchain_openai.AzureChatOpenAI | Config-supported |
 
-Switch providers by changing the `llm.llm_provider` and `llm.model` fields in `global_config.yaml`.
+Switch providers by changing the `llm.llm_provider` and `llm.model` fields in `global_config.yaml`. The `llm_provider` field selects the backend module (`anthropic` or `qgenie`), while the `model` field uses the `provider::model_name` prefix for routing.
 
 ---
 

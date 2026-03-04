@@ -297,6 +297,7 @@
     <a href="#features">Features</a>
     <a href="#pipeline">Pipeline</a>
     <a href="#analyzers">Analyzers</a>
+    <a href="#dashboard">Dashboard</a>
     <a href="#metrics">Metrics</a>
     <button class="btn-nav" onclick="window.location.href='http://localhost:8502'">Get Started</button>
   </div>
@@ -306,7 +307,7 @@
 <section class="hero">
   <div class="hero-badge"><span class="dot"></span> Built for Verilog &amp; SystemVerilog</div>
   <h1>Everything you need to create<br><span class="gradient">quality silicon</span></h1>
-  <p>CARE is the multi-agent intelligence engine that improves HDL quality — catching synthesis hazards, CDC violations, and design flaws across your entire RTL codebase, then fixing them.</p>
+  <p>CARE is the multi-agent analysis and repair engine for Verilog/SystemVerilog — nine analyzers, seven deep adapters, design context integration, and LLM-powered review catch synthesis hazards, CDC violations, and design flaws, then fix them.</p>
   <div class="hero-actions">
     <button class="btn-primary" onclick="window.location.href='http://localhost:8502'">Start Analysis</button>
     <button class="btn-secondary" onclick="document.getElementById('pipeline').scrollIntoView({behavior:'smooth'})">See How It Works</button>
@@ -352,7 +353,7 @@
 <section id="features">
   <div class="section-label reveal">Capabilities</div>
   <div class="section-title reveal">Everything you need to create<br>quality silicon</div>
-  <div class="section-desc reveal">Nine specialized analyzers, seven dependency services, LLM-powered review, and human-in-the-loop feedback — all orchestrated in a single pipeline.</div>
+  <div class="section-desc reveal">Nine specialized analyzers, seven deep adapters, seven dependency services, LLM-powered review, design context integration, and human-in-the-loop feedback — all orchestrated in a single pipeline.</div>
 
   <div class="features">
     <div class="feature-card reveal">
@@ -383,7 +384,22 @@
     <div class="feature-card reveal">
       <div class="feature-icon icon-white">&#128202;</div>
       <h3>Health Metrics</h3>
-      <p>Composite scoring across dependency, quality, complexity, maintainability, documentation, verification coverage, and security dimensions.</p>
+      <p>Composite scoring across dependency, quality, complexity, maintainability, documentation, verification coverage, and signal integrity dimensions.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon icon-teal">&#128196;</div>
+      <h3>Design Context Aware</h3>
+      <p>Parses SDC timing constraints, TCL synthesis scripts, DRC waivers, block hierarchy, and register maps to enrich analyzer accuracy.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon icon-purple">&#128640;</div>
+      <h3>Whole-File Analysis</h3>
+      <p>Sends entire HDL files to LLMs without chunking by default — preserving full module context, clock domains, and signal dependencies.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon icon-blue">&#9940;</div>
+      <h3>Pipeline Controls</h3>
+      <p>Real-time phase tracking with cooperative stop/halt. Cancel running analysis or fixer pipelines gracefully between phases.</p>
     </div>
   </div>
 </section>
@@ -395,38 +411,51 @@
   <div class="section-desc reveal">From file discovery to branded PDF reports — CARE orchestrates every step of your RTL quality assessment.</div>
 
   <div class="pipeline-flow reveal">
-    <div class="pipe-step"><div class="num">1</div><h4>File Discovery</h4><p>.v .sv .svh .vh</p></div>
+    <div class="pipe-step"><div class="num">1</div><h4>File Discovery &amp; Caching</h4><p>.v .sv .svh .vh + context files</p></div>
     <div class="pipe-arrow">&#10230;</div>
-    <div class="pipe-step"><div class="num">2</div><h4>9 Analyzers</h4><p>Batch static analysis</p></div>
+    <div class="pipe-step"><div class="num">2</div><h4>Batch Analysis</h4><p>9 static analyzers</p></div>
     <div class="pipe-arrow">&#10230;</div>
     <div class="pipe-step"><div class="num">3</div><h4>Dependency Graph</h4><p>7 service modules</p></div>
     <div class="pipe-arrow">&#10230;</div>
-    <div class="pipe-step"><div class="num">4</div><h4>Health Metrics</h4><p>Composite scoring</p></div>
+    <div class="pipe-step"><div class="num">4</div><h4>Health Metrics</h4><p>Composite scoring (A–F)</p></div>
     <div class="pipe-arrow">&#10230;</div>
-    <div class="pipe-step"><div class="num">5</div><h4>LLM Enrichment</h4><p>Semantic analysis</p></div>
+    <div class="pipe-step"><div class="num">5</div><h4>LLM Enrichment</h4><p>Semantic design review</p></div>
     <div class="pipe-arrow">&#10230;</div>
-    <div class="pipe-step"><div class="num">6</div><h4>Reports</h4><p>Excel + PDF</p></div>
+    <div class="pipe-step"><div class="num">6</div><h4>Report Generation</h4><p>Excel + JSON + HTML</p></div>
     <div class="pipe-arrow">&#10230;</div>
-    <div class="pipe-step"><div class="num">7</div><h4>Visualization</h4><p>Mermaid + Vector DB</p></div>
+    <div class="pipe-step"><div class="num">7</div><h4>Visualization</h4><p>Mermaid diagrams + summary</p></div>
   </div>
 </section>
 
 <!-- ── Analyzers ──────────────────────────────────────────── -->
 <section id="analyzers">
   <div class="section-label reveal">Analysis Engine</div>
-  <div class="section-title reveal">Nine analyzers.<br>Seven dependency services.</div>
-  <div class="section-desc reveal">Purpose-built static analysis for hardware description languages — not repurposed software tools.</div>
+  <div class="section-title reveal">Nine analyzers. Seven adapters.<br>Seven dependency services.</div>
+  <div class="section-desc reveal">Purpose-built static analysis for hardware description languages — not repurposed software tools. Deep adapters leverage Verilator and Verible with graceful regex fallback.</div>
 
   <div class="analyzer-grid reveal">
-    <div class="analyzer-chip"><span class="az-icon">&#9881;</span>AST Complexity</div>
-    <div class="analyzer-chip"><span class="az-icon">&#128230;</span>Module Metrics</div>
-    <div class="analyzer-chip"><span class="az-icon">&#128274;</span>Lint / DRC</div>
-    <div class="analyzer-chip"><span class="az-icon">&#128279;</span>Hierarchy</div>
+    <div class="analyzer-chip"><span class="az-icon">&#9889;</span>CDC Analysis</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128736;</span>Synthesis Safety</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128274;</span>Quality / Lint</div>
+    <div class="analyzer-chip"><span class="az-icon">&#9881;</span>Complexity</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128268;</span>Signal Integrity</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128300;</span>Uninitialized Signals</div>
     <div class="analyzer-chip"><span class="az-icon">&#128203;</span>Documentation</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128201;</span>Maintainability</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128269;</span>Verification Coverage</div>
+  </div>
+
+  <div style="margin-top:2.5rem" class="reveal">
+    <div class="section-label" style="margin-top:2rem">Deep Analysis Adapters</div>
+  </div>
+  <div class="analyzer-grid reveal">
+    <div class="analyzer-chip"><span class="az-icon">&#9881;</span>HDL Complexity</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128279;</span>Hierarchy / Call Graph</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128230;</span>Module Metrics</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128274;</span>HDL Lint</div>
     <div class="analyzer-chip"><span class="az-icon">&#128736;</span>Unused Module</div>
     <div class="analyzer-chip"><span class="az-icon">&#9878;</span>Dependency Graph</div>
-    <div class="analyzer-chip"><span class="az-icon">&#128201;</span>Naming Convention</div>
-    <div class="analyzer-chip"><span class="az-icon">&#128300;</span>Testability</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128202;</span>Excel Report</div>
   </div>
 
   <div style="margin-top:2.5rem" class="reveal">
@@ -443,16 +472,33 @@
   </div>
 </section>
 
+<!-- ── Dashboard ────────────────────────────────────────────── -->
+<section id="dashboard" style="background:rgba(0,212,170,.02)">
+  <div class="section-label reveal">Interactive Dashboard</div>
+  <div class="section-title reveal">Seven workflow tabs.<br>Real-time pipeline control.</div>
+  <div class="section-desc reveal">A dark-themed Streamlit dashboard with phase tracking, adapter grades, stop/halt controls, HITL feedback, and interactive chat.</div>
+
+  <div class="analyzer-grid reveal">
+    <div class="analyzer-chip"><span class="az-icon">&#128202;</span>Analyze</div>
+    <div class="analyzer-chip"><span class="az-icon">&#9881;</span>Pipeline</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128221;</span>Review</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128295;</span>Fix &amp; QA</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128203;</span>Audit</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128208;</span>Constraints</div>
+    <div class="analyzer-chip"><span class="az-icon">&#128200;</span>Telemetry</div>
+  </div>
+</section>
+
 <!-- ── Metrics ────────────────────────────────────────────── -->
-<section id="metrics" style="background:rgba(0,212,170,.02)">
+<section id="metrics">
   <div class="section-label reveal">By the Numbers</div>
   <div class="section-title reveal">Built for production<br>silicon design teams</div>
 
   <div class="stats-strip reveal">
     <div class="stat-box"><div class="number">9</div><div class="unit">Static Analyzers</div></div>
+    <div class="stat-box"><div class="number">7</div><div class="unit">Deep Adapters</div></div>
     <div class="stat-box"><div class="number">7</div><div class="unit">Dependency Services</div></div>
-    <div class="stat-box"><div class="number">6</div><div class="unit">Metric Adapters</div></div>
-    <div class="stat-box"><div class="number">3</div><div class="unit">Repair Agents</div></div>
+    <div class="stat-box"><div class="number">6</div><div class="unit">LLM Agents</div></div>
     <div class="stat-box"><div class="number">100</div><div class="unit">Point Health Score</div></div>
   </div>
 </section>
