@@ -224,7 +224,7 @@ class ExcelReportAdapter(BaseStaticAdapter):
                 # Add table sheet
                 writer.add_table_sheet(
                     headers=headers,
-                    data=data_rows,
+                    data_rows=data_rows,
                     sheet_name=sheet_name,
                     status_column="Severity",
                 )
