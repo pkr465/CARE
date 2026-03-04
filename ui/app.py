@@ -743,6 +743,7 @@ def page_pipeline():
             if status == "success":
                 st.session_state["analysis_results"] = result_store.get("analysis_results", [])
                 st.session_state["analysis_metrics"] = result_store.get("analysis_metrics", {})
+                st.session_state["adapter_results"] = result_store.get("adapter_results") or {}
                 # Invalidate cached feedback DataFrame so Review tab rebuilds it
                 st.session_state["feedback_df"] = None
             elif status == "stopped":
@@ -784,6 +785,36 @@ def page_pipeline():
             stats = metrics.get("statistics", {})
             files = stats.get("processed_files", stats.get("total_files", len(results)))
             st.metric("Files Analyzed", files)
+
+        # Adapter grades (deep static analysis)
+        adapter_results = st.session_state.get("adapter_results", {})
+        if adapter_results and isinstance(adapter_results, dict):
+            # Collect adapters that actually ran (have a grade)
+            grade_items = []
+            for aname, ares in adapter_results.items():
+                if isinstance(ares, dict) and "grade" in ares:
+                    grade_items.append((aname, ares))
+            if grade_items:
+                st.markdown(
+                    "<div style='margin-top:8px; margin-bottom:4px;'>"
+                    "<span style='font-size:14px; font-weight:600;'>"
+                    "Deep Analysis Grades</span></div>",
+                    unsafe_allow_html=True,
+                )
+                grade_cols = st.columns(min(len(grade_items), 6))
+                for i, (aname, ares) in enumerate(grade_items):
+                    col_idx = i % len(grade_cols)
+                    grade = ares.get("grade", "?")
+                    score = ares.get("score", 0)
+                    details_n = len(ares.get("details", []))
+                    display = aname.replace("_", " ").title()
+                    with grade_cols[col_idx]:
+                        st.metric(
+                            display,
+                            grade,
+                            delta=f"{details_n} findings" if details_n else "clean",
+                            delta_color="off" if details_n == 0 else "inverse",
+                        )
 
         col1, col2 = st.columns(2)
         with col1:
