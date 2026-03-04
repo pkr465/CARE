@@ -122,7 +122,7 @@ _DEFAULTS = {
     "batch_size": 25,
     "use_llm": True,
     "enable_adapters": True,
-    "use_verible": False,
+    "use_verible": True,
     "exclude_dirs": "",
     "exclude_globs": "",
     "exclude_headers": "",
@@ -490,7 +490,7 @@ def page_analyze():
             if not is_patch_mode:
                 use_verible = st.checkbox(
                     "Use Verible (semantic dependency analysis)",
-                    value=False,
+                    value=True,
                     help="Requires verible installed. Provides accurate module hierarchy and dependency context for LLM analysis.",
                 )
                 st.session_state["use_verible"] = use_verible

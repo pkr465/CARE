@@ -298,15 +298,27 @@ def app_css() -> None:
         }}
 
         /* ── Expander styling ────────────────────────────────────── */
-        .streamlit-expanderHeader {{
+        .streamlit-expanderHeader,
+        [data-testid="stExpander"] summary,
+        [data-testid="stExpander"] [data-testid="stExpanderToggleIcon"] {{
             font-weight: 600 !important;
             color: {CARE_TEXT} !important;
             background: {CARE_SURFACE} !important;
         }}
-        details {{
+        details,
+        [data-testid="stExpander"],
+        [data-testid="stExpander"] details {{
             background: {CARE_SURFACE} !important;
             border: 1px solid {CARE_BORDER} !important;
             border-radius: 10px !important;
+        }}
+        [data-testid="stExpander"] summary p,
+        [data-testid="stExpander"] summary span {{
+            color: {CARE_TEXT} !important;
+        }}
+        [data-testid="stExpander"] [data-testid="stExpanderDetails"] {{
+            background: {CARE_SURFACE} !important;
+            color: {CARE_TEXT} !important;
         }}
 
         /* ── Metric cards ────────────────────────────────────────── */
@@ -997,8 +1009,13 @@ def folder_browser(
 
     # Use the native result if one was just picked
     effective_default = default_path
+    text_widget_key = f"{key}_text"
     if result_key in st.session_state and st.session_state[result_key]:
         effective_default = st.session_state[result_key]
+        # Force-update the text widget's session state so it displays the
+        # newly selected path (Streamlit ignores `value=` once a widget key
+        # exists in session_state).
+        st.session_state[text_widget_key] = effective_default
 
     # ── Text input + Browse button side by side ───────────────────────────
     col_input, col_btn = st.columns([5, 1])
@@ -1006,7 +1023,7 @@ def folder_browser(
         typed_path = st.text_input(
             label,
             value=effective_default,
-            key=f"{key}_text",
+            key=text_widget_key,
             help=help_text or "Type a path or click Browse to navigate.",
         )
     with col_btn:
