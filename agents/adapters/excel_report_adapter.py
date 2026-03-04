@@ -153,9 +153,9 @@ class ExcelReportAdapter(BaseStaticAdapter):
             headers = list(summary_data.keys())
             data_rows = [list(summary_data.values())]
 
-            writer.add_data_sheet(
+            writer.add_table_sheet(
                 headers=headers,
-                data=data_rows,
+                data_rows=data_rows,
                 sheet_name="static_overview",
             )
 

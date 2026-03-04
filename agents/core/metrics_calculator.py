@@ -185,9 +185,9 @@ class MetricsCalculator:
         that require Verible will degrade gracefully.
         """
         try:
-            from agents.hdl.verible_parser import VeribleParser
+            from agents.core.verible_parser_wrapper import VeribleParserWrapper
 
-            parser = VeribleParser(debug=self.debug)
+            parser = VeribleParserWrapper(debug=self.debug)
             return parser
         except Exception as exc:
             logger.warning(f"Verible parser init failed (adapters will degrade): {exc}")
@@ -235,7 +235,7 @@ class MetricsCalculator:
                     result = adapter.analyze(
                         file_cache,
                         verible_parser=verible_parser,
-                        hierarchy_graph=hierarchy_graph,
+                        dependency_graph=hierarchy_graph,
                     )
                     adapter_results[name] = result
                     avail = result.get("tool_available", True)
