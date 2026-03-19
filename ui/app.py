@@ -127,6 +127,11 @@ _DEFAULTS = {
     "exclude_globs": "",
     "exclude_headers": "",
     "custom_constraints": "",
+    "exclude_context_files": "",
+    "define_config_file": "",
+    "max_file_size_mb": 1,
+    "enable_retry": True,
+    "verbose_file_logging": False,
     "file_to_fix": None,
     # Pipeline state
     "analysis_in_progress": False,
@@ -534,6 +539,65 @@ def page_analyze():
                 )
                 st.session_state["custom_constraints"] = custom_constraints
 
+    # ── Analysis Tuning (new CURE-inspired options) ──────────────────────
+    with st.expander("Analysis Tuning", expanded=False):
+        tune_col1, tune_col2 = st.columns(2)
+        with tune_col1:
+            if not is_patch_mode:
+                define_config = st.text_input(
+                    "`define Config File(s)",
+                    value=st.session_state.get("define_config_file", ""),
+                    help=(
+                        "Path(s) to Verilog define header files (.vh/.svh) containing "
+                        "`define flags. When set, inactive `ifdef/`ifndef blocks are "
+                        "stripped before LLM analysis. Comma-separated for multiple files."
+                    ),
+                )
+                st.session_state["define_config_file"] = define_config
+
+                exclude_ctx_files = st.text_input(
+                    "Exclude Context Files (comma-separated)",
+                    value=st.session_state.get("exclude_context_files", ""),
+                    help=(
+                        "Files matching these patterns are analyzed but NOT injected as "
+                        "context into other files' LLM prompts. "
+                        "e.g., auto_generated_regs.v, vendor/*.v"
+                    ),
+                )
+                st.session_state["exclude_context_files"] = exclude_ctx_files
+
+            enable_retry = st.checkbox(
+                "Enable LLM Retry with Backoff",
+                value=st.session_state.get("enable_retry", True),
+                help=(
+                    "Retry failed LLM calls (HTTP 429, 5xx, timeouts) with exponential "
+                    "backoff (5s → 10s → 20s). Helps with flaky API endpoints."
+                ),
+            )
+            st.session_state["enable_retry"] = enable_retry
+
+        with tune_col2:
+            if not is_patch_mode:
+                max_file_mb = st.number_input(
+                    "Max File Size (MB)",
+                    min_value=0,
+                    max_value=50,
+                    value=st.session_state.get("max_file_size_mb", 1),
+                    help=(
+                        "Skip files larger than this during LLM analysis. "
+                        "Auto-generated HDL files (register banks, IP wrappers) are "
+                        "often very large. Set 0 to disable. Default: 1 MB."
+                    ),
+                )
+                st.session_state["max_file_size_mb"] = max_file_mb
+
+            verbose_logging = st.checkbox(
+                "Verbose File Logging",
+                value=st.session_state.get("verbose_file_logging", False),
+                help="Log per-file size, timing, and processing details. Useful for diagnosing hangs.",
+            )
+            st.session_state["verbose_file_logging"] = verbose_logging
+
         output_dir = st_tools.folder_browser(
             label="Output Directory",
             default_path=st.session_state.get("output_dir", "./out"),
@@ -660,6 +724,15 @@ def page_analyze():
                     for c in st.session_state.get("custom_constraints", "").split(",")
                     if c.strip()
                 ],
+                "exclude_context_files": [
+                    f.strip()
+                    for f in st.session_state.get("exclude_context_files", "").split(",")
+                    if f.strip()
+                ],
+                "define_config_file": st.session_state.get("define_config_file", ""),
+                "max_file_size": st.session_state.get("max_file_size_mb", 1) * 1048576,
+                "enable_retry": st.session_state.get("enable_retry", True),
+                "verbose_file_logging": st.session_state.get("verbose_file_logging", False),
                 "debug_mode": st.session_state.get("debug_mode", False),
                 "file_to_fix": st.session_state.get("file_to_fix"),
             }
@@ -2811,9 +2884,9 @@ def page_chat():
     with st.chat_message("assistant", avatar=APP_ICON):
         st.markdown(
             f"<b>Welcome to <span style='color:{st_tools.CARE_PRIMARY};'>CARE</span> "
-            "Codebase Health Chat!</b><br>"
-            "Ask about dependencies, complexity, security, documentation, "
-            "maintainability, test coverage, and refactoring recommendations.",
+            "HDL Design Health Chat!</b><br>"
+            "Ask about module hierarchy, clock domain crossings, synthesis safety, "
+            "signal integrity, design complexity, and auto-repair recommendations.",
             unsafe_allow_html=True,
         )
 
@@ -2822,14 +2895,19 @@ def page_chat():
     # Sample queries
     with st.expander("Example questions you can ask"):
         st.markdown(
-            "- **Module deep-dive**: _Show all details about the auth module — "
-            "dependencies, security risks, test coverage, and documentation gaps._\n"
-            "- **Overall health**: _Summarize the codebase health across all dimensions. "
+            "- **Module deep-dive**: _Show all details about the SPI controller module — "
+            "port list, instantiation hierarchy, CDC risks, and lint violations._\n"
+            "- **CDC analysis**: _List all clock domain crossings that lack proper synchronizers. "
+            "Show source and destination clock domains._\n"
+            "- **Overall health**: _Summarize the RTL codebase health across all dimensions. "
             "Highlight the top 3 issues I should fix first._\n"
-            "- **Security audit**: _List all high-severity security findings with file "
-            "names and line numbers._\n"
-            "- **Dead code**: _Which functions are unreachable from any entry point?_\n"
-            "- **Complexity hotspots**: _Show functions with cyclomatic complexity above 25._"
+            "- **Synthesis safety**: _Find all latch inferences, combinational loops, and "
+            "blocking assignments in sequential always blocks._\n"
+            "- **Signal integrity**: _Which signals have width mismatches at module port connections?_\n"
+            "- **Dead modules**: _Which modules are never instantiated anywhere in the design?_\n"
+            "- **Complexity hotspots**: _Show modules with cyclomatic complexity above 25 "
+            "or more than 50 always blocks._\n"
+            "- **Design context**: _What timing constraints from the SDC files affect the FIFO module?_"
         )
 
     # Render existing history
@@ -2918,16 +2996,25 @@ def page_about():
     with col2:
         st.markdown(
             "## About CARE\n\n"
-            "**CARE** (Codebase Analysis & Repair Engine) is a multi-stage Verilog/SystemVerilog HDL codebase "
-            "health analysis pipeline. It combines fast regex-based static analyzers with "
-            "deep static analysis adapters (Verilator, Verible) and "
-            "LLM-powered code review to produce actionable health metrics.\n\n"
+            "**CARE** (Codebase Analysis & Repair Engine) is a multi-agent Verilog/SystemVerilog "
+            "HDL codebase health analysis and repair framework. It combines 9 regex-based static "
+            "analyzers, 7 deep analysis adapters (Verilator, Verible), 7 dependency services, "
+            "and LLM-powered code review to produce actionable health metrics and auto-fix issues.\n\n"
             "**Key features:**\n\n"
-            "- 9 built-in HDL analyzers (CDC, synthesis safety, signal integrity, complexity, etc.)\n"
-            "- Deep static adapters: AST complexity, dead code detection, module hierarchy analysis\n"
+            "- 9 built-in HDL analyzers (CDC, synthesis safety, signal integrity, complexity, "
+            "quality, documentation, maintainability, verification coverage, uninitialized signals)\n"
+            "- 7 deep static adapters with Verilator/Verible backends and regex fallback\n"
+            "- 7 dependency services (module hierarchy, include resolution, package import, "
+            "parameter propagation, interface binding, generate expansion, symbol table)\n"
             "- Multi-provider LLM support (Anthropic, QGenie, Vertex AI, Azure OpenAI)\n"
-            "- Human-in-the-loop agentic code repair\n"
-            "- Vector DB ingestion for RAG-powered chat\n"
+            "- Design context integration (SDC clocks, DRC waivers, block hierarchy, register maps)\n"
+            "- `ifdef/`ifndef preprocessing — strip inactive conditional blocks before LLM analysis\n"
+            "- Chunk-level retry with exponential backoff for resilient LLM calls\n"
+            "- Large file guard — skip auto-generated HDL files exceeding configurable size limit\n"
+            "- Whole-file analysis mode — send entire HDL files without chunking (default)\n"
+            "- Human-in-the-loop agentic code repair with fixer audit trail\n"
+            "- Cooperative pipeline stop/halt with real-time phase tracking\n"
+            "- Vector DB ingestion for RAG-powered interactive chat\n"
         )
 
     st.divider()
@@ -2937,29 +3024,50 @@ def page_about():
     FAQS = [
         (
             "What can I ask in the chat?",
-            "Ask about code health metrics, module dependencies, security findings, "
-            "documentation gaps, test coverage, complexity hotspots, dead code, "
-            "and refactoring recommendations.",
+            "Ask about module hierarchy, clock domain crossings, synthesis safety, "
+            "signal integrity, design complexity, dead modules, lint violations, "
+            "documentation gaps, and auto-repair recommendations.",
         ),
         (
             "What data does this use?",
             "It uses precomputed codebase analysis reports (healthreport.json), "
-            "dependency graphs, static analysis adapter results, and vector DB "
-            "embeddings generated by the CARE pipeline.",
+            "dependency graphs, static analysis adapter results, design context "
+            "(SDC, DRC waivers), and vector DB embeddings generated by the CARE pipeline.",
         ),
         (
             "How do I populate the data?",
             "Run the analysis pipeline first:\n\n"
             "```bash\n"
-            "python main.py --codebase-path /path/to/project --enable-vector-db --enable-adapters\n"
+            "python main.py --codebase-path /path/to/project --enable-vector-db --enable-deep-analysis\n"
             "```\n\n"
-            "Or use the **Analyze** page in this dashboard to run analysis interactively.",
+            "Or use the **Analyze** tab in this dashboard to run analysis interactively.",
         ),
         (
             "What are deep static adapters?",
-            "Adapters powered by real HDL analysis tools instead of regex. "
-            "Use `--enable-deep-analysis` to activate Verilator (lint, complexity), "
-            "Verible (syntax, hierarchy), and regex fallback for dead code and module metrics.",
+            "7 adapters powered by real HDL tools instead of regex: "
+            "HDL Complexity (Verilator), HDL Lint (Verilator/Verible), "
+            "Module Hierarchy, Module Metrics, Unused Module detection, "
+            "Dependency Graph, and Excel Report generation. "
+            "All gracefully fall back to regex when tools are unavailable.",
+        ),
+        (
+            "What is `ifdef preprocessing?",
+            "When you set a `define config file in Analysis Tuning, CARE reads "
+            "`define macros from that header and strips inactive `ifdef/`ifndef "
+            "blocks before sending code to the LLM. This reduces false positives "
+            "on conditionally compiled code. Line numbers are preserved.",
+        ),
+        (
+            "How does retry with backoff work?",
+            "When an LLM API call fails with HTTP 429 (rate limit), 5xx (server error), "
+            "or timeout, CARE retries up to 3 times with exponential backoff: "
+            "5s → 10s → 20s. Non-retryable errors (auth, invalid request) fail immediately.",
+        ),
+        (
+            "What is the large file guard?",
+            "Files exceeding the configured Max File Size (default: 1 MB) are skipped "
+            "during LLM analysis. Auto-generated HDL files like register banks, "
+            "memory models, and IP wrappers are often very large and not worth analyzing.",
         ),
     ]
     for q, a in FAQS:

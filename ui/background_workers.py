@@ -342,6 +342,39 @@ def run_analysis_background(
             existing = ctx_data.get("exclude_includes", []) or []
             ctx_data["exclude_includes"] = list(dict.fromkeys(existing + ui_exclude_headers))
 
+        # Inject UI analysis tuning overrides into global_config
+        if global_config:
+            # Context-level file exclusion
+            ui_exclude_ctx = config.get("exclude_context_files", [])
+            if ui_exclude_ctx:
+                ctx_data = global_config._data.setdefault("context", {})
+                existing_ctx = ctx_data.get("exclude_context_files", []) or []
+                ctx_data["exclude_context_files"] = list(dict.fromkeys(existing_ctx + ui_exclude_ctx))
+
+            # `define config file for ifdef preprocessing
+            ui_define_cfg = config.get("define_config_file", "")
+            if ui_define_cfg:
+                ctx_data = global_config._data.setdefault("context", {})
+                ctx_data["define_config_file"] = ui_define_cfg
+
+            # Large file guard
+            ui_max_file = config.get("max_file_size")
+            if ui_max_file is not None:
+                analysis_data = global_config._data.setdefault("analysis", {})
+                analysis_data["max_file_size"] = ui_max_file
+
+            # Verbose file logging
+            ui_verbose = config.get("verbose_file_logging", False)
+            if ui_verbose:
+                analysis_data = global_config._data.setdefault("analysis", {})
+                analysis_data["verbose_file_logging"] = True
+
+            # Retry toggle
+            ui_retry = config.get("enable_retry", True)
+            if not ui_retry:
+                llm_data = global_config._data.setdefault("llm", {})
+                llm_data["chunk_retry_max"] = 0
+
         # Initialize LLMTools (router auto-selects provider from config)
         llm_tools = None
         if config.get("use_llm", True):

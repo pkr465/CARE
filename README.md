@@ -254,7 +254,7 @@ CARE includes 6 agents for static analysis, semantic review, repair, and interac
 The primary analysis orchestrator. Runs the 7-phase pipeline with optional LLM enrichment in Phase 5 (codebase insights, dependency analysis, documentation recommendations). Produces the canonical `designhealth.json`.
 
 ### CodebaseLLMAgent
-Per-module semantic design review using multi-turn LLM orchestration. Integrates with the vector database for RAG (retrieval-augmented generation) and the HITL feedback store for learning from human reviews. Produces `design_review.xlsx`.
+Per-module semantic design review using multi-turn LLM orchestration. Integrates with the vector database for RAG (retrieval-augmented generation) and the HITL feedback store for learning from human reviews. Supports `\`ifdef`/`\`ifndef` preprocessing (strips inactive conditional blocks before LLM analysis) and large file guard (skips auto-generated files exceeding configurable size). Produces `design_review.xlsx`.
 
 ### CodebaseFixerAgent
 Analyzes detected issues from static analysis and generates LLM-powered remediation suggestions prioritized by severity. Produces fix recommendations with explanations and confidence scores.
@@ -266,7 +266,7 @@ Single-file patch/diff analysis. Parses unified diffs, reconstructs patched HDL,
 Multi-file patch application. Parses patches with `===` file headers, applies diffs to corresponding source files, writes patched copies to `out/patched_files/` preserving folder structure. Supports dry-run mode.
 
 ### CodebaseAnalysisChatAgent
-Interactive conversational HDL analysis with multi-turn state management, vector database semantic search, intent extraction, and criteria-based filtering. Returns JSON-structured responses for chatbot integration.
+Interactive conversational HDL analysis with multi-turn state management, vector database semantic search, intent extraction, and criteria-based filtering. Supports LLM retry with backoff for resilient chat responses. Returns JSON-structured responses for chatbot integration.
 
 ---
 
@@ -294,10 +294,10 @@ Hierarchical YAML configuration with `${ENV_VAR}` substitution for secrets:
 | `scanning` | Directory/glob exclusions for HDL analysis (sim_results, synthesis, .Xil, etc.) |
 | `design_context` | Constraint file discovery patterns, injection toggles (SDC clocks, false paths, DRC waivers, block boundaries), LLM context size limit |
 | `hierarchy_builder` | Verible/Verilator executables, timeouts, cache settings, hierarchy depth limits |
-| `context` | Include file resolution depth, max context chars, system package exclusions |
+| `context` | Include context injection, `ifdef preprocessing, exclude patterns, hierarchy tracing depth, index file size limits |
 | `synthesis` | Target technology (fpga/asic), clock period, reset strategy |
 | `eda_tools` | Paths to Verilator, Verible, Yosys, Icarus Verilog |
-| `analysis` | Chunking control (`enable_chunking`, `chunk_size_tokens`) — send whole files or split for LLM context |
+| `analysis` | Chunking control, large file guard (`max_file_size`), verbose file logging |
 | `hitl` | Feedback store enable, RAG settings, constraint file patterns |
 | `telemetry` | Silent PostgreSQL-backed usage tracking |
 | `email` | SMTP configuration for report delivery |
@@ -308,7 +308,7 @@ Hierarchical YAML configuration with `${ENV_VAR}` substitution for secrets:
 | `dependency_analysis` | Module/include dependency graph configuration |
 | `embeddings` | Vector embedding model selection |
 
-### Analysis Chunking Configuration
+### Analysis Pipeline Configuration
 
 By default, CARE sends entire Verilog/SystemVerilog files to the LLM without chunking. This preserves full context (module boundaries, signal dependencies, clock domains) which is critical for HDL analysis accuracy. Modern LLMs with 128K–1M token context windows can handle typical HDL files whole.
 
@@ -316,9 +316,40 @@ By default, CARE sends entire Verilog/SystemVerilog files to the LLM without chu
 analysis:
   enable_chunking: false        # false = send whole file (default)
   chunk_size_tokens: 150000     # only used when enable_chunking: true
+  max_file_size: 1048576        # skip files > 1 MB (auto-generated guards)
+  verbose_file_logging: false   # per-file timing/size logging
 ```
 
-When `enable_chunking: true`, files are split into chunks of `chunk_size_tokens * 4` characters (approximating 4 chars per token). Each chunk is analyzed independently with overlap.
+When `enable_chunking: true`, files are split into chunks of `chunk_size_tokens * 4` characters (approximating 4 chars per token). Each chunk is analyzed independently with overlap. Files exceeding `max_file_size` bytes are skipped entirely (useful for auto-generated register banks, IP wrappers, and memory models).
+
+### Chunk-Level Retry with Exponential Backoff
+
+All CARE agents (LLM, Patch, Fixer, Chat) use a shared retry module (`utils/common/llm_retry.py`) that transparently wraps every `llm_tools.llm_call()` invocation. When LLM API calls fail, retries are attempted with exponential backoff:
+
+```yaml
+llm:
+  chunk_retry_max: 3            # max retry attempts per chunk (0 = disable)
+  chunk_retry_backoff_sec: 5    # initial backoff in seconds (doubles each retry)
+```
+
+The backoff schedule is: 5s → 10s → 20s. Retryable errors are detected via compiled regex matching against both raised exceptions and error-string returns (some LLM backends return `"LLM invocation failed:..."` strings instead of raising). Retryable patterns include: HTTP 429/rate-limit, 5xx server errors, timeouts, connection resets, overloaded/capacity messages, and `broken pipe`. Non-retryable errors (auth failures, invalid requests) fail immediately. On final failure, the error string is returned (rather than raised) so downstream parsing gracefully produces zero issues instead of crashing the pipeline.
+
+### Context Configuration
+
+The `context` section controls how CARE enriches LLM prompts with cross-module evidence:
+
+```yaml
+context:
+  enable_include_context: true
+  define_config_file: ""              # Verilog `define header for `ifdef preprocessing
+  exclude_context_files: []           # Files excluded from context injection
+  max_hierarchy_trace_depth: 5        # Module instantiation chain depth
+  max_hierarchy_context_chars: 10000  # Max cross-module evidence per chunk
+  max_index_file_size: 524288         # Skip files > 512 KB during indexing
+  verbose_indexing: false             # Per-file debug logging during index build
+```
+
+When `define_config_file` is set, CARE reads `\`define` macros from the specified header(s) and strips inactive `\`ifdef`/`\`ifndef`/`\`elsif`/`\`else`/`\`endif` blocks before LLM analysis. Line numbers are preserved (inactive lines become blank) to keep issue locations accurate. The preprocessor handles nested conditionals, multi-branch `\`elsif` chains, and logs warnings for orphaned directives (e.g., `\`else` without matching `\`ifdef`) and unclosed blocks at EOF.
 
 ### Environment Variables (.env)
 
@@ -437,6 +468,7 @@ QGENIE_API_KEY=""       # Optional, for QGenie models
 │   │   ├── llm_tools.py                # Multi-provider LLM router
 │   │   ├── llm_tools_anthropic.py      # Anthropic Claude SDK
 │   │   ├── llm_tools_qgenie.py         # QGenie SDK via LangChain
+│   │   ├── llm_retry.py                # Chunk-level retry with exponential backoff
 │   │   ├── email_reporter.py           # SMTP report delivery
 │   │   └── excel_writer.py             # Professional Excel workbooks
 │   ├── parsers/
@@ -645,6 +677,10 @@ The pipeline supports cooperative stop/halt via `threading.Event`. Stop buttons 
 ### Advanced Options (Analysis Tab)
 
 Deep adapters (Verilator/Verible) and Verible semantic analysis are enabled by default. The Advanced Options expander includes toggles for deep adapters, Verible, dependency granularity (File/Module/Package), and file exclusion patterns.
+
+### Analysis Tuning (Analysis Tab)
+
+A second expander provides fine-grained control over LLM analysis behavior: `\`define` config file for `\`ifdef` preprocessing, context-level file exclusion patterns, LLM retry toggle with exponential backoff, max file size guard (default: 1 MB), and verbose per-file logging.
 
 ---
 

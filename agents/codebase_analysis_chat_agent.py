@@ -4,6 +4,12 @@ import logging
 import sys
 import re
 
+try:
+    from utils.common.llm_retry import llm_call_with_retry
+    _RETRY_AVAILABLE = True
+except ImportError:
+    _RETRY_AVAILABLE = False
+
 # NOTE: Do NOT use logging.basicConfig(force=True) here — it resets the root
 # logger and installs a StreamHandler that floods the Streamlit UI console.
 # Module-level loggers inherit from the root logger configured by the workers.
@@ -40,6 +46,17 @@ class CodebaseAnalysisOrchestration:
         if vectordb is None:
             vectordb = self._init_vectordb()
         self.tools = LLMTools(vectordb=vectordb)
+
+        # Retry config from global_config
+        self._retry_max = 3
+        self._retry_backoff = 5.0
+        try:
+            from utils.parsers.global_config_parser import GlobalConfig
+            _cfg = GlobalConfig()
+            self._retry_max = _cfg.get_int("llm.chunk_retry_max", 3)
+            self._retry_backoff = _cfg.get_float("llm.chunk_retry_backoff_sec", 5.0)
+        except Exception:
+            pass
 
     @staticmethod
     def _init_vectordb():
@@ -302,8 +319,17 @@ class CodebaseAnalysisOrchestration:
             state.records
         )
 
-        # Step 3: LLM Call
-        state.llm_response = self.tools.llm_call(state.prompt)
+        # Step 3: LLM Call (with retry)
+        if _RETRY_AVAILABLE:
+            state.llm_response = llm_call_with_retry(
+                self.tools, state.prompt,
+                max_retries=self._retry_max,
+                backoff_sec=self._retry_backoff,
+                chunk_label="chat",
+                log=logger,
+            )
+        else:
+            state.llm_response = self.tools.llm_call(state.prompt)
 
         # Step 4: Format response
         state.formatted_response = self.tools.format_llm_response(state.llm_response)

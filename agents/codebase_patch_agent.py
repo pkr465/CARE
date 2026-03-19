@@ -117,6 +117,12 @@ except ImportError:
     LLMTools = None
 
 try:
+    from utils.common.llm_retry import llm_call_with_retry
+    LLM_RETRY_AVAILABLE = True
+except ImportError:
+    LLM_RETRY_AVAILABLE = False
+
+try:
     from utils.parsers.global_config_parser import GlobalConfig
     GLOBAL_CONFIG_AVAILABLE = True
 except ImportError:
@@ -231,6 +237,17 @@ class CodebasePatchAgent:
         # Telemetry (optional — fire-and-forget)
         self._telemetry = telemetry
         self._telemetry_run_id = telemetry_run_id
+
+        # Chunk-level retry config
+        if self.config and hasattr(self.config, 'get_int'):
+            self._retry_max = self.config.get_int("llm.chunk_retry_max", 3)
+            self._retry_backoff = self.config.get_float("llm.chunk_retry_backoff_sec", 5.0)
+        elif self.config and hasattr(self.config, 'get'):
+            self._retry_max = int(self.config.get("llm.chunk_retry_max", 3) or 3)
+            self._retry_backoff = float(self.config.get("llm.chunk_retry_backoff_sec", 5.0) or 5.0)
+        else:
+            self._retry_max = 3
+            self._retry_backoff = 5.0
 
         # Context codebase path — the REAL codebase root used by the inner
         # CodebaseLLMAgent for header resolution, context validation, and
@@ -1324,10 +1341,19 @@ class CodebasePatchAgent:
             except Exception:
                 pass  # never fail on debug dump
 
-            # --- LLM call ---
+            # --- LLM call (with retry) ---
             try:
                 _llm_t0 = time.time()
-                response = self.llm_tools.llm_call(final_prompt)
+                if LLM_RETRY_AVAILABLE:
+                    response = llm_call_with_retry(
+                        self.llm_tools, final_prompt,
+                        max_retries=self._retry_max,
+                        backoff_sec=self._retry_backoff,
+                        chunk_label=f"patch:{filename} chunk {rng_idx + 1}",
+                        log=self.logger,
+                    )
+                else:
+                    response = self.llm_tools.llm_call(final_prompt)
                 _llm_ms = int((time.time() - _llm_t0) * 1000)
 
                 # Telemetry: per-call LLM logging

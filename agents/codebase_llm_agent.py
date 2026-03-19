@@ -13,6 +13,7 @@ from typing import List, Dict, Optional, Tuple
 
 # --- Imports ---
 from utils.common.llm_tools import LLMTools, LLMConfig
+from utils.common.llm_retry import llm_call_with_retry
 from utils.common.email_reporter import EmailReporter
 from utils.common.excel_writer import ExcelWriter, ExcelStyle
 from utils.parsers.global_config_parser import GlobalConfig
@@ -204,6 +205,27 @@ class CodebaseLLMAgent:
             f" | chunk_size={_chunk_tokens:,} tokens ({self.TARGET_CHUNK_CHARS:,} chars)"
         )
 
+        # --- Chunk-level retry config ---
+        if self.config:
+            self.chunk_retry_max = self.config.get_int("llm.chunk_retry_max", 3)
+            self.chunk_retry_backoff = self.config.get_float("llm.chunk_retry_backoff_sec", 5.0)
+        else:
+            self.chunk_retry_max = 3
+            self.chunk_retry_backoff = 5.0
+        if self.chunk_retry_max > 0:
+            logger.info(
+                f"[*] Chunk retry: max={self.chunk_retry_max}, "
+                f"backoff={self.chunk_retry_backoff}s (exponential)"
+            )
+
+        # --- Large file guard ---
+        if self.config:
+            self.max_file_size = self.config.get_int("analysis.max_file_size", 1048576)
+            self.verbose_file_logging = self.config.get_bool("analysis.verbose_file_logging", False)
+        else:
+            self.max_file_size = 1048576  # 1 MB default
+            self.verbose_file_logging = False
+
         self.results: List[Dict] = []
         self.errors: List[Dict] = []
 
@@ -277,8 +299,24 @@ class CodebaseLLMAgent:
             except Exception as cv_err:
                 logger.debug(f"Context Validator init failed: {cv_err}")
 
-        # --- Static Call Stack Analyzer (cross-function call chain tracing) ---
+        # --- Static Call Stack Analyzer (cross-module instantiation tracing) ---
         self.call_stack_analyzer = None
+        _hierarchy_trace_depth = int(context_cfg.get("max_hierarchy_trace_depth", 5)) if isinstance(context_cfg, dict) else 5
+        _hierarchy_ctx_chars = int(context_cfg.get("max_hierarchy_context_chars", 10000)) if isinstance(context_cfg, dict) else 10000
+        _max_idx_file_size = int(context_cfg.get("max_index_file_size", 524288)) if isinstance(context_cfg, dict) else 524288
+        _verbose_indexing = context_cfg.get("verbose_indexing", False) if isinstance(context_cfg, dict) else False
+        self._exclude_context_files = context_cfg.get("exclude_context_files", []) if isinstance(context_cfg, dict) else []
+
+        # --- Verilog `ifdef/`ifndef preprocessing defines ---
+        self._active_defines: set = set()
+        _define_cfg = context_cfg.get("define_config_file", "") if isinstance(context_cfg, dict) else ""
+        if _define_cfg:
+            self._active_defines = self._load_defines_from_config(_define_cfg)
+            if self._active_defines:
+                logger.info(f"[*] `ifdef preprocessing ENABLED: {len(self._active_defines)} defines loaded")
+            else:
+                logger.info("[*] `ifdef preprocessing: define_config_file set but no defines found")
+
         if CALL_STACK_ANALYZER_AVAILABLE:
             try:
                 _csa_cache_dir = os.path.join(self.output_dir, ".cache")
@@ -288,8 +326,8 @@ class CodebaseLLMAgent:
                     exclude_globs=self.exclude_globs,
                     header_context_builder=self.header_context_builder,
                     use_verible=self.use_verible,
-                    max_trace_depth=3,
-                    max_context_chars=1200,
+                    max_trace_depth=_hierarchy_trace_depth,
+                    max_context_chars=_hierarchy_ctx_chars,
                     cache_dir=_csa_cache_dir,
                 )
                 logger.info(
@@ -550,18 +588,50 @@ class CodebaseLLMAgent:
         INJECTS: "Issue Identification Rules" from common and specific constraints.
         """
         try:
+            # ── Large file guard ───────────────────────────────────────
+            if self.max_file_size > 0:
+                try:
+                    file_size = file_path.stat().st_size
+                    if file_size > self.max_file_size:
+                        logger.warning(
+                            f"  Skipping {rel_path}: file size {file_size:,} bytes "
+                            f"exceeds max_file_size ({self.max_file_size:,} bytes). "
+                            f"Likely auto-generated."
+                        )
+                        return
+                except OSError:
+                    pass  # proceed if stat fails
+
+            _file_start = time.time()
+
             with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                 code_content = f.read()
 
             if not code_content.strip():
                 return
 
+            if self.verbose_file_logging:
+                logger.info(
+                    f"  Processing {rel_path} "
+                    f"({len(code_content):,} chars, "
+                    f"{file_path.stat().st_size:,} bytes)"
+                )
+
             # --- Load "Issue Identification Rules" Constraints for this file ---
             constraints_context = self._load_constraints(rel_path, section_keyword="Issue Identification Rules")
 
             # --- Resolve header includes for context-aware analysis ---
+            # Skip context injection if this file is in exclude_context_files
+            _skip_context = False
+            if self._exclude_context_files:
+                for pattern in self._exclude_context_files:
+                    if fnmatch.fnmatch(rel_path, pattern) or fnmatch.fnmatch(Path(rel_path).name, pattern):
+                        _skip_context = True
+                        logger.debug(f"    Skipping context injection for {rel_path} (matches exclude_context_files pattern '{pattern}')")
+                        break
+
             file_includes = []
-            if self.header_context_builder:
+            if self.header_context_builder and not _skip_context:
                 try:
                     file_includes = self.header_context_builder.resolve_includes(str(file_path))
                     if file_includes:
@@ -578,6 +648,10 @@ class CodebaseLLMAgent:
                     logger.debug(f"    Header resolution failed for {rel_path}: {hdr_err}")
             else:
                 logger.debug(f"    HeaderContextBuilder not available (builder=None)")
+
+            # 0b. `ifdef/`ifndef preprocessing (strip inactive blocks)
+            if self._active_defines:
+                code_content = self._preprocess_ifdefs(code_content)
 
             # 1. Physical Chunking (Brace Counting)
             chunks = self._smart_chunk_code(code_content)
@@ -865,7 +939,13 @@ class CodebaseLLMAgent:
                         pass  # never fail on debug dump
 
                 _llm_start = time.time()
-                response = self.llm_tools.llm_call(final_prompt)
+                response = llm_call_with_retry(
+                    self.llm_tools, final_prompt,
+                    max_retries=self.chunk_retry_max,
+                    backoff_sec=self.chunk_retry_backoff,
+                    chunk_label=f"{rel_path} chunk {chunk_idx + 1}/{total_chunks}",
+                    log=logger,
+                )
                 _llm_ms = int((time.time() - _llm_start) * 1000)
 
                 # Telemetry: log per-call LLM usage
@@ -918,8 +998,141 @@ class CodebaseLLMAgent:
                                 severity=result.get("Severity", "medium"),
                             )
 
+            if self.verbose_file_logging:
+                _file_elapsed = time.time() - _file_start
+                logger.info(
+                    f"  Completed {rel_path} in {_file_elapsed:.1f}s "
+                    f"({total_chunks} chunk(s), {len(self.results)} total issues)"
+                )
+
         except Exception as e:
             raise e
+
+    # ── `ifdef/`ifndef preprocessing ───────────────────────────────────────
+    def _load_defines_from_config(self, config_paths) -> set:
+        """
+        Reads one or more Verilog define header files and extracts all
+        ``\`define MACRO_NAME`` entries.  Returns a set of defined macro names.
+        """
+        defines: set = set()
+        if isinstance(config_paths, str):
+            config_paths = [p.strip() for p in config_paths.split(",") if p.strip()]
+        for cfg_path_str in (config_paths or []):
+            cfg_path = Path(cfg_path_str)
+            if not cfg_path.is_absolute():
+                cfg_path = self.codebase_path / cfg_path
+            if not cfg_path.is_file():
+                logger.warning(f"  define_config_file not found: {cfg_path}")
+                continue
+            try:
+                with open(cfg_path, "r", encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        stripped = line.strip()
+                        m = re.match(r'`define\s+(\w+)', stripped)
+                        if m:
+                            defines.add(m.group(1))
+            except Exception as e:
+                logger.warning(f"  Failed to read define config {cfg_path}: {e}")
+        return defines
+
+    def _preprocess_ifdefs(self, content: str) -> str:
+        """
+        Strips inactive ``\`ifdef``/``\`ifndef``/``\`elsif``/``\`else``/``\`endif``
+        blocks based on ``self._active_defines``.  Lines inside inactive blocks
+        are replaced with blank lines to preserve line numbering.
+
+        Edge cases handled:
+        - Nested ``\`ifdef`` / ``\`ifndef`` blocks
+        - Multi-branch ``\`elsif`` chains
+        - Orphaned ``\`else``/``\`endif``/``\`elsif`` without matching ``\`ifdef`` (warning + skip)
+        - Unclosed ``\`ifdef`` at EOF (warning logged)
+        """
+        if not self._active_defines:
+            return content
+
+        lines = content.split("\n")
+        result: list = []
+        # Stack entries: (is_active, any_branch_was_active)
+        # Base entry represents top-level (always active)
+        stack: list = [(True, True)]
+
+        for line_no, line in enumerate(lines, 1):
+            stripped = line.strip()
+
+            ifdef_m = re.match(r'`ifdef\s+(\w+)', stripped)
+            ifndef_m = re.match(r'`ifndef\s+(\w+)', stripped) if not ifdef_m else None
+            elsif_m = re.match(r'`elsif\s+(\w+)', stripped) if not ifdef_m and not ifndef_m else None
+
+            if ifdef_m:
+                macro = ifdef_m.group(1)
+                parent_active = stack[-1][0]
+                active = parent_active and (macro in self._active_defines)
+                stack.append((active, active))
+                result.append("")  # blank out directive line
+
+            elif ifndef_m:
+                macro = ifndef_m.group(1)
+                parent_active = stack[-1][0]
+                active = parent_active and (macro not in self._active_defines)
+                stack.append((active, active))
+                result.append("")
+
+            elif elsif_m:
+                macro = elsif_m.group(1)
+                if len(stack) <= 1:
+                    logger.warning(
+                        f"  `ifdef preprocessor: orphaned `elsif at line {line_no} "
+                        f"(no matching `ifdef/`ifndef) — skipping"
+                    )
+                    result.append("")
+                    continue
+                parent_active = stack[-2][0]
+                was_active = stack[-1][1]
+                active = parent_active and not was_active and (macro in self._active_defines)
+                stack[-1] = (active, was_active or active)
+                result.append("")
+
+            elif stripped == "`else":
+                if len(stack) <= 1:
+                    logger.warning(
+                        f"  `ifdef preprocessor: orphaned `else at line {line_no} "
+                        f"(no matching `ifdef/`ifndef) — skipping"
+                    )
+                    result.append("")
+                    continue
+                parent_active = stack[-2][0]
+                was_active = stack[-1][1]
+                active = parent_active and not was_active
+                stack[-1] = (active, True)
+                result.append("")
+
+            elif stripped == "`endif":
+                if len(stack) <= 1:
+                    logger.warning(
+                        f"  `ifdef preprocessor: orphaned `endif at line {line_no} "
+                        f"(no matching `ifdef/`ifndef) — skipping"
+                    )
+                    result.append("")
+                    continue
+                stack.pop()
+                result.append("")
+
+            else:
+                # Normal line: keep if active, blank if inactive
+                if stack[-1][0]:
+                    result.append(line)
+                else:
+                    result.append("")
+
+        # EOF validation: warn if there are unclosed `ifdef/`ifndef blocks
+        unclosed = len(stack) - 1
+        if unclosed > 0:
+            logger.warning(
+                f"  `ifdef preprocessor: {unclosed} unclosed `ifdef/`ifndef "
+                f"block(s) at end of file — remaining code treated as active"
+            )
+
+        return "\n".join(result)
 
     def _smart_chunk_code(self, content: str) -> List[Tuple[str, int]]:
         """

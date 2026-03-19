@@ -93,6 +93,16 @@ llm:
   timeout: 120 # seconds per request
   max_retries: 2
 
+  # ── Chunk-level retry (agent-side) ─────────────────────────────────────
+  # When an LLM call for a code chunk fails (e.g. HTTP 429 rate-limit,
+  # timeout, or 5xx server error), the agent retries the call up to
+  # chunk_retry_max times with exponential backoff.
+  #   initial wait = chunk_retry_backoff_sec
+  #   subsequent waits double each time (backoff * 2^attempt)
+  # Set chunk_retry_max to 0 to disable chunk-level retries entirely.
+  chunk_retry_max: 3            # max retry attempts per chunk (0 = disable)
+  chunk_retry_backoff_sec: 5    # initial backoff in seconds (doubles each retry)
+
   # ── Intent extraction tuning ───────────────────────────────────────────
   intent_max_tokens: 1000000
   intent_temperature: 0.0
@@ -162,6 +172,19 @@ analysis:
   # Modern models support 128k-1M context; 150 000 tokens covers most RTL files.
   # ~4 chars per token heuristic → 150 000 tokens ≈ 600 000 chars.
   chunk_size_tokens: 150000
+
+  # ── Large file guard ─────────────────────────────────────────────────────
+  # Skip files larger than this size (bytes) during LLM analysis.
+  # Auto-generated HDL files (register banks, IP wrappers, memory models) can
+  # be very large and are rarely worth LLM analysis time.
+  # Set to 0 to disable the limit (not recommended).  Default: 1048576 (1 MB).
+  max_file_size: 1048576
+
+  # ── Per-file debug logging ──────────────────────────────────────────────
+  # When true, logs every file as it is processed (with size and timing).
+  # Useful for diagnosing which file is causing a hang or timeout.
+  # Turn OFF for normal usage to reduce log noise.
+  verbose_file_logging: false
 
 # ----------------------------------------------------------------------------
 # Scanning — File discovery exclusions (HDL-specific)
@@ -374,6 +397,47 @@ context:
   #  - "auto_generated.vh"
   #  - "defines_*.vh"
   #  - "vendor/third_party.vh"
+
+  # Source files (.v, .sv) to exclude from context building for LLM analysis.
+  # Files matching these patterns are still scanned and analyzed but are NOT
+  # injected as context into other files' LLM prompts.
+  # Supports exact filenames, basenames, relative paths, and fnmatch glob patterns.
+  exclude_context_files: []
+  #  - "auto_generated_regs.v"
+  #  - "test_*.sv"
+  #  - "vendor/*.v"
+
+  # Path(s) to define header file(s) (.vh/.svh) containing `define flags.
+  # When set, `ifdef/`ifndef/`elsif/`endif preprocessing is applied:
+  #   1) Context: only definitions active under these defines are injected.
+  #   2) Source: code inside inactive conditional compilation blocks is
+  #      stripped before LLM analysis. Line numbers are preserved
+  #      (inactive lines become blank) to keep issue locations accurate.
+  # Supports: single path string, comma-separated paths, or a YAML list.
+  define_config_file: ""
+  #  - "include/project_defines.vh"
+  #  - "include/platform_config.svh"
+
+  # Module hierarchy tracing depth: how many levels of instantiation to walk
+  # when tracing signals through module hierarchy for cross-module evidence.
+  # Higher values find more evidence but increase analysis time.
+  max_hierarchy_trace_depth: 5
+
+  # Maximum characters of hierarchy context to inject per code chunk.
+  # Controls the size of the cross-module evidence block added to LLM prompts.
+  max_hierarchy_context_chars: 10000
+
+  # Maximum source file size (bytes) for context indexing.
+  # Files larger than this are skipped during context building to avoid
+  # hangs on auto-generated sources.
+  # Set to 0 to disable the limit (not recommended).  Default: 524288 (512 KB).
+  max_index_file_size: 524288
+
+  # Per-file debug logging during context index building.
+  # When true, logs every file as it is indexed (with size and timing).
+  # Useful for diagnosing which file is causing a hang.
+  # Turn OFF for normal usage to reduce log noise.
+  verbose_indexing: false
 
 # ────────────────────────────────────────────────────────────────────────────
 # Synthesis — Target technology and timing constraints for HDL analysis

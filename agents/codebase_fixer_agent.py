@@ -28,6 +28,12 @@ try:
 except ImportError:
     raise ImportError("LLMTools not found. Ensure utils.common.llm_tools is available.")
 
+try:
+    from utils.common.llm_retry import llm_call_with_retry
+    LLM_RETRY_AVAILABLE = True
+except ImportError:
+    LLM_RETRY_AVAILABLE = False
+
 # -------------------------------------------------------------------------
 # EMAIL REPORTER INTEGRATION
 # -------------------------------------------------------------------------
@@ -119,6 +125,14 @@ class CodebaseFixerAgent:
         # Telemetry (optional)
         self._telemetry = telemetry
         self._telemetry_run_id = telemetry_run_id
+
+        # Chunk-level retry config
+        if self.config and hasattr(self.config, 'get_int'):
+            self._retry_max = self.config.get_int("llm.chunk_retry_max", 3)
+            self._retry_backoff = self.config.get_float("llm.chunk_retry_backoff_sec", 5.0)
+        else:
+            self._retry_max = 3
+            self._retry_backoff = 5.0
 
         # Audit trail for detailed tracking of every decision
         self.audit_trail: List[Dict] = []
@@ -456,7 +470,16 @@ class CodebaseFixerAgent:
 
                 coding_model = self.config.get("llm.coding_model") if self.config else None
                 _llm_t0 = time.time()
-                llm_response = self.llm_tools.llm_call(prompt, model=coding_model)
+                if LLM_RETRY_AVAILABLE:
+                    llm_response = llm_call_with_retry(
+                        self.llm_tools, prompt,
+                        max_retries=self._retry_max,
+                        backoff_sec=self._retry_backoff,
+                        chunk_label=f"fix:{filename} chunk {i + 1}",
+                        model=coding_model,
+                    )
+                else:
+                    llm_response = self.llm_tools.llm_call(prompt, model=coding_model)
                 _llm_ms = int((time.time() - _llm_t0) * 1000)
 
                 # Telemetry: per-call LLM logging
